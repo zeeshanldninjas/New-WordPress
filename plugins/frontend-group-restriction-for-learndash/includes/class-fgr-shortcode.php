@@ -16,6 +16,18 @@ class FGR_Shorcode {
     private static $instance = null;
 
     private $no_courses_message_shown = false;
+    
+    /**
+     * Track if any course queries resulted in empty results
+     * @var bool
+     */
+    private $has_empty_course_listings = false;
+    
+    /**
+     * Track if output buffering is active
+     * @var bool
+     */
+    private $output_buffering_active = false;
 
     /**
      * @since 1.0
@@ -46,6 +58,10 @@ class FGR_Shorcode {
         // add_filter( 'ld_course_list_shortcode_attr_values', [ $this, 'fgr_make_price_type_empty' ], 10, 2 );
         // add_filter( 'ld_course_list', [ $this, 'fgr_ld_course_list' ], 10, 3 );
         add_action( 'wp_ajax_fgr_group_records', [ $this, 'fgr_group_records' ] );
+        
+        // Universal output buffering solution for empty course listings
+        add_action( 'template_redirect', [ $this, 'fgr_start_output_buffering' ], 1 );
+        add_action( 'wp_footer', [ $this, 'fgr_end_output_buffering' ], 999 );
     }
 
     /**
@@ -346,12 +362,15 @@ class FGR_Shorcode {
 		}
 
         $visible_courses = 0;
+        $total_courses_in_query = 0;
 
         foreach ( $posts as $key => $post ) {
             
             if ( empty( $post->post_type ) || $post->post_type !== 'sfwd-courses' ) {
                 continue;
             }
+
+            $total_courses_in_query++;
 
             if ( 'on' !== $hide_post ) {
                 continue;
@@ -365,24 +384,11 @@ class FGR_Shorcode {
         }
 
         /**
-         * If all courses are restricted
+         * Track if this query had courses but all were hidden
+         * This will be used by the universal output buffer solution
          */
-        if ( $query->get( 'post_type' ) === 'sfwd-courses' && $visible_courses === 0 && ! $this->no_courses_message_shown ) {
-
-            $this->no_courses_message_shown = true;
-            $custom_message = isset( $fgr_options['fgr-archive-page-message'] ) ? $fgr_options['fgr-archive-page-message'] : '';
-
-            global $wpdb;
-            $p_id = $wpdb->get_var( $wpdb->prepare(
-                " SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s ORDER BY ID ASC LIMIT 1 ", 
-                'fgr',
-                'publish'
-            ) );
-
-            $fgr_wp_post = get_post( $p_id );
-            if ( $fgr_wp_post instanceof WP_Post ) { 
-                $posts[] = $fgr_wp_post;
-            }
+        if ( $total_courses_in_query > 0 && $visible_courses === 0 ) {
+            $this->has_empty_course_listings = true;
         }
 
         return array_values( $posts );
@@ -705,6 +711,150 @@ class FGR_Shorcode {
                 'courses'     => $courses_data,
             ]
         );
+    }
+
+    /**
+     * Start output buffering to capture page content for universal course listing detection
+     * This works at the WordPress core level, similar to how posts_results operates universally
+     */
+    public function fgr_start_output_buffering() {
+        
+        // Skip if in admin, doing AJAX, or REST request
+        if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
+            return;
+        }
+
+        // Skip if user is not logged in
+        if ( ! is_user_logged_in() ) {
+            return;
+        }
+
+        // Check if hiding restricted courses is enabled
+        $fgr_options = get_option( 'fgr-restriction' );
+        $hide_post = isset( $fgr_options['fgr-hide-restricted-course'] ) ? $fgr_options['fgr-hide-restricted-course'] : 'off';
+        
+        if ( 'on' !== $hide_post ) {
+            return;
+        }
+
+        // Check if current URL is excluded
+        $excluded_urls = isset( $fgr_options['fgr-exclude-url'] ) ? $fgr_options['fgr-exclude-url'] : [];
+        if ( ! empty( $excluded_urls ) ) {
+            $excluded_urls = array_map( 'trim', array_filter( explode( ',', $excluded_urls ) ) );
+            $protocol = ( ( !empty( $_SERVER['HTTPS'] ) && $_SERVER['HTTPS'] != 'off' ) || $_SERVER['SERVER_PORT'] == 443 ) ? "https://" : "http://";
+            $current_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+            if ( is_array( $excluded_urls ) && in_array( $current_url, $excluded_urls ) ) {
+                return;
+            }
+        }
+
+        // Start output buffering
+        ob_start();
+        $this->output_buffering_active = true;
+    }
+
+    /**
+     * End output buffering and process content to inject messages for empty course listings
+     * This provides universal coverage for any plugin that generates course listings
+     */
+    public function fgr_end_output_buffering() {
+        
+        if ( ! $this->output_buffering_active ) {
+            return;
+        }
+
+        // Get the buffered content
+        $content = ob_get_contents();
+        ob_end_clean();
+
+        // Only process if we detected empty course listings
+        if ( $this->has_empty_course_listings && ! $this->no_courses_message_shown ) {
+            $content = $this->fgr_inject_empty_course_message( $content );
+            $this->no_courses_message_shown = true;
+        }
+
+        // Output the processed content
+        echo $content;
+        $this->output_buffering_active = false;
+    }
+
+    /**
+     * Inject custom message into empty course listing areas
+     * Uses universal detection patterns that work regardless of the plugin generating the listings
+     * 
+     * @param string $content The page content
+     * @return string Modified content with injected messages
+     */
+    private function fgr_inject_empty_course_message( $content ) {
+        
+        // Get the custom message from settings
+        $fgr_options = get_option( 'fgr-restriction' );
+        $custom_message = isset( $fgr_options['fgr-archive-page-message'] ) ? $fgr_options['fgr-archive-page-message'] : __( 'All courses are restricted for you.', 'frontend-group-restriction-for-LearnDash' );
+        
+        if ( empty( $custom_message ) ) {
+            $custom_message = __( 'All courses are restricted for you.', 'frontend-group-restriction-for-LearnDash' );
+        }
+
+        // Create the message HTML
+        $message_html = '<div class="fgr-no-courses-message" style="padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center;">' . wpautop( $custom_message ) . '</div>';
+
+        // Universal detection patterns for course listings
+        $patterns = [
+            // LearnDash course list shortcode containers
+            '/<div[^>]*class="[^"]*ld-course-list[^"]*"[^>]*>(\s*)<\/div>/i',
+            '/<div[^>]*class="[^"]*learndash-course-list[^"]*"[^>]*>(\s*)<\/div>/i',
+            
+            // Generic course archive containers
+            '/<div[^>]*class="[^"]*courses[^"]*"[^>]*>(\s*)<\/div>/i',
+            '/<div[^>]*class="[^"]*course-list[^"]*"[^>]*>(\s*)<\/div>/i',
+            '/<div[^>]*class="[^"]*course-grid[^"]*"[^>]*>(\s*)<\/div>/i',
+            
+            // WordPress archive containers for sfwd-courses
+            '/<div[^>]*class="[^"]*post-type-archive-sfwd-courses[^"]*"[^>]*>(\s*)<\/div>/i',
+            
+            // Generic post listing containers that might be empty
+            '/<div[^>]*class="[^"]*posts[^"]*"[^>]*>(\s*)<\/div>/i',
+            '/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(\s*)<\/div>/i',
+            
+            // Main content areas that might contain course listings
+            '/<main[^>]*class="[^"]*"[^>]*>(\s*)<\/main>/i',
+            '/<div[^>]*class="[^"]*content[^"]*"[^>]*>(\s*)<\/div>/i',
+        ];
+
+        // Try to inject message into detected empty containers
+        foreach ( $patterns as $pattern ) {
+            if ( preg_match( $pattern, $content ) ) {
+                $content = preg_replace( $pattern, '<div$1>' . $message_html . '</div>', $content, 1 );
+                break; // Only inject once
+            }
+        }
+
+        // Fallback: If no empty containers found but we know courses were hidden,
+        // try to inject after common course listing indicators
+        if ( strpos( $content, 'fgr-no-courses-message' ) === false ) {
+            
+            $fallback_patterns = [
+                // After LearnDash course list shortcode
+                '/(\[ld_course_list[^\]]*\])/i',
+                
+                // After course archive headers
+                '/(<h1[^>]*class="[^"]*archive-title[^"]*"[^>]*>.*?<\/h1>)/i',
+                '/(<h1[^>]*class="[^"]*page-title[^"]*"[^>]*>.*?<\/h1>)/i',
+                
+                // After main content opening tags
+                '/(<main[^>]*>)/i',
+                '/(<div[^>]*class="[^"]*content[^"]*"[^>]*>)/i',
+            ];
+
+            foreach ( $fallback_patterns as $pattern ) {
+                if ( preg_match( $pattern, $content ) ) {
+                    $content = preg_replace( $pattern, '$1' . $message_html, $content, 1 );
+                    break;
+                }
+            }
+        }
+
+        return $content;
     }
 }
 

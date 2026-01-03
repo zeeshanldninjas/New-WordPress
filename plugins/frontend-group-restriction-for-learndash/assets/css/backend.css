@@ -1,0 +1,183 @@
+.fgr-shortcode-wrap label {
+    padding: 0 34px 0 0;
+}
+.fgr-shortcode-wrap .fgr-shortcode,
+.fgr-tag-wrap .fgr-tags,
+.fgr-redirect-wrap .fgr-redirect-option,
+.fgr-exclude-wrap .fgr-exclude-option {
+    width: 85%;
+}
+.fgr-message-wrap,
+.fgr-shortcode-wrap,
+.fgr-tag-wrap,
+.fgr-group-option-wrap {
+    margin-top: 40px;
+}
+.fgr-message-wrap {
+    margin-bottom: 10px;
+}
+.fgr-message-wrap label,
+.fgr-shortcode-wrap label {
+    font-weight: 600;
+}
+.fgr-wrap {
+    margin-right: 20px;
+    margin-top: 20px;
+    position: relative;
+    min-width: 255px;
+    box-shadow: 0 1px 1px rgb(0 0 0 / 4%);
+}
+.fgr-content-wrap {
+    position: relative;
+    width: 66%;
+    background-color: #ffffff;
+    border: 1px solid #c3c4c7;
+    float: left;
+    padding-bottom: 3%;
+}
+.fgr-wrap .fgr-metabox-heading,
+.fgr-exp-heading {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 12px;
+    margin: 0;
+    line-height: 1.4;
+    border-bottom: 1px solid #c3c4c7;
+}
+.fgr-tab-content {
+    position: relative;
+    padding: 25px 20px;
+}
+.fgr-explanation-metabox {
+    position: relative;
+    width: 32%;
+    background-color: #ffffff;
+    border: 1px solid #c3c4c7;
+    float: left;
+    margin-left: 1%;
+}
+.fgr-exp-content {
+    position: relative;
+    height: 60px;
+    max-height: 60px;
+    padding: 16px 7px;
+}
+.fgr-exp-link {
+    display: block;
+    padding-top: 8px;
+    float: left;
+}
+.fgr-exp-content .restriction-btn {
+    float: right;
+}
+.fgr-message-title,
+.fgr-shortcode-title,
+.fgr-tag-title,
+.fgr-group-option-title,
+.fgr-redirect-title,
+.fgr-exclude-title {
+    width: 160px;
+    float: left;
+}
+.fgr-tag-wrapper .fgr-useful-tags h4 {
+    color: steelblue;
+}
+.fgr-tag-wrapper {
+    font-weight: 600;
+}
+.fgr-tag-wrapper li{
+    font-style: italic;
+    list-style: none;
+}
+.fgr-tags {
+    background: rgba(0,0,0,.07);
+    padding: 1% 1%;
+}
+.fgr-checkbox {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+.fgr-checkbox input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.fgr-checkmark {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+.fgr-checkmark:before {
+  position: absolute;
+  content: "";
+  height: 15px;
+  width: 15px;
+  left: 4px;
+  bottom: 3px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .fgr-checkmark {
+  background-color: #2196F3;
+}
+
+input:focus + .fgr-checkmark {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .fgr-checkmark:before {
+  -webkit-transform: translateX(16px);
+  -ms-transform: translateX(16px);
+  transform: translateX(16px);
+}
+.fgr-checkmark.round {
+  border-radius: 34px;
+}
+
+.fgr-checkmark.round:before {
+  border-radius: 50%;
+}
+.fgr-tag-wrap .fgr-tags {
+    font-family: Courier New;
+}
+.exclude-urls,
+.redirect-url {
+    width: 80%;
+}
+.exclude-urls {
+    height: 160px;
+}
+.fgr-course-groups,
+.fgr-exclude-wrap {
+    display: none;
+}
+.fgr-course-groups {
+    margin-left: 165px;
+    margin-top: 12px;
+}
+.fgr-message,
+.fgr-tags,
+.fgr-group-option {
+    margin: 50px 0 0 162px;
+}
+.fgr-message-title,
+.fgr-tag-title {
+    margin-top: 50px;
+}
+.fgr-help-content,
+.shortcode-page{
+    width: 80%;
+}
+.fgr-page-link {
+    margin-top: 13px;
+}

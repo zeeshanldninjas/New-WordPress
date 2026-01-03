@@ -16,6 +16,12 @@ class FGR_Shorcode {
     private static $instance = null;
 
     private $no_courses_message_shown = false;
+    
+    /**
+     * Track if we need to display a restriction message
+     * @var bool
+     */
+    private $has_pending_restriction_message = false;
 
     /**
      * @since 1.0
@@ -48,8 +54,8 @@ class FGR_Shorcode {
         add_action( 'wp_ajax_fgr_group_records', [ $this, 'fgr_group_records' ] );
         
         // Universal query-level solution for empty course listings
-        add_action( 'loop_start', [ $this, 'fgr_detect_empty_course_loop' ], 10 );
-        add_action( 'loop_end', [ $this, 'fgr_display_restriction_message_after_loop' ], 10 );
+        add_filter( 'the_posts', [ $this, 'fgr_detect_and_handle_empty_course_queries' ], 10, 2 );
+        add_action( 'wp_footer', [ $this, 'fgr_display_pending_restriction_messages' ], 5 );
     }
 
     /**
@@ -709,51 +715,45 @@ class FGR_Shorcode {
     }
 
     /**
-     * Detect when a loop starts and check if it's an empty course loop
-     * This works at the WordPress loop level, universally for any plugin using WP_Query
+     * Detect empty course queries and set flag for message display
+     * This works at the WordPress query level, universally for any plugin using WP_Query
      * 
+     * @param array $posts Array of post objects
      * @param WP_Query $query The WP_Query instance
+     * @return array Unmodified posts array
      */
-    public function fgr_detect_empty_course_loop( $query ) {
+    public function fgr_detect_and_handle_empty_course_queries( $posts, $query ) {
         
         // Skip if in admin, doing AJAX, or REST request
         if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
-            return;
+            return $posts;
         }
 
         // Check if this query had courses but all were restricted
         if ( ! empty( $query->fgr_had_courses ) && ! empty( $query->fgr_all_courses_restricted ) ) {
             
-            // Mark that we need to show a message after this loop
-            $query->fgr_show_message_after_loop = true;
-            
-            // Also set a global flag for this request to prevent duplicates
+            // Set flag to display message later
             if ( ! $this->no_courses_message_shown ) {
-                $query->fgr_should_display_message = true;
+                $this->has_pending_restriction_message = true;
             }
         }
+
+        return $posts;
     }
 
     /**
-     * Display restriction message after empty course loops
-     * This displays the message OUTSIDE the post grid/loop structure
-     * 
-     * @param WP_Query $query The WP_Query instance
+     * Display pending restriction messages in wp_footer
+     * This ensures the message displays regardless of theme/plugin implementation
      */
-    public function fgr_display_restriction_message_after_loop( $query ) {
+    public function fgr_display_pending_restriction_messages() {
         
         // Skip if in admin, doing AJAX, or REST request
         if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
             return;
         }
 
-        // Only display if this query needs the message and we haven't shown it yet
-        if ( empty( $query->fgr_show_message_after_loop ) || empty( $query->fgr_should_display_message ) ) {
-            return;
-        }
-
-        // Prevent showing the message multiple times on the same page
-        if ( $this->no_courses_message_shown ) {
+        // Only display if we have a pending message and haven't shown it yet
+        if ( ! $this->has_pending_restriction_message || $this->no_courses_message_shown ) {
             return;
         }
 
@@ -765,13 +765,73 @@ class FGR_Shorcode {
             $custom_message = __( 'All courses are restricted for you.', 'frontend-group-restriction-for-LearnDash' );
         }
 
-        // Display the message outside the loop structure
-        echo '<div class="fgr-restriction-message" style="padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center;">';
-        echo wpautop( $custom_message );
-        echo '</div>';
+        // Use JavaScript to inject the message into the page content
+        ?>
+        <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find potential course listing containers
+            var containers = [
+                // LearnDash specific containers
+                document.querySelector('.ld-course-list'),
+                document.querySelector('.learndash-course-list'),
+                document.querySelector('[class*="ld-course"]'),
+                
+                // Generic course containers
+                document.querySelector('.courses'),
+                document.querySelector('.course-list'),
+                document.querySelector('.course-grid'),
+                
+                // Archive containers
+                document.querySelector('.post-type-archive-sfwd-courses'),
+                document.querySelector('[class*="archive"]'),
+                
+                // Main content areas
+                document.querySelector('main'),
+                document.querySelector('.content'),
+                document.querySelector('#content'),
+                document.querySelector('.site-content'),
+                
+                // Fallback to body
+                document.body
+            ];
+            
+            // Find the first available container
+            var targetContainer = null;
+            for (var i = 0; i < containers.length; i++) {
+                if (containers[i]) {
+                    targetContainer = containers[i];
+                    break;
+                }
+            }
+            
+            if (targetContainer) {
+                // Create the message element
+                var messageDiv = document.createElement('div');
+                messageDiv.className = 'fgr-restriction-message';
+                messageDiv.style.cssText = 'padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center; clear: both;';
+                messageDiv.innerHTML = <?php echo json_encode( wpautop( $custom_message ) ); ?>;
+                
+                // Insert the message
+                if (targetContainer === document.body) {
+                    // If using body as fallback, try to insert after main content
+                    var mainContent = document.querySelector('main') || document.querySelector('.content') || document.querySelector('#content');
+                    if (mainContent) {
+                        mainContent.appendChild(messageDiv);
+                    } else {
+                        targetContainer.appendChild(messageDiv);
+                    }
+                } else {
+                    // Insert at the beginning of the container
+                    targetContainer.insertBefore(messageDiv, targetContainer.firstChild);
+                }
+            }
+        });
+        </script>
+        <?php
 
         // Mark that we've shown the message
         $this->no_courses_message_shown = true;
+        $this->has_pending_restriction_message = false;
     }
 }
 

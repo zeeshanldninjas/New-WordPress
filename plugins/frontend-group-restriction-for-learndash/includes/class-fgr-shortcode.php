@@ -48,8 +48,8 @@ class FGR_Shorcode {
         add_action( 'wp_ajax_fgr_group_records', [ $this, 'fgr_group_records' ] );
         
         // Universal query-level solution for empty course listings
-        add_filter( 'the_posts', [ $this, 'fgr_inject_restriction_message_post' ], 10, 2 );
-        add_filter( 'the_content', [ $this, 'fgr_render_restriction_message_content' ], 10 );
+        add_action( 'loop_start', [ $this, 'fgr_detect_empty_course_loop' ], 10 );
+        add_action( 'loop_end', [ $this, 'fgr_display_restriction_message_after_loop' ], 10 );
     }
 
     /**
@@ -709,51 +709,54 @@ class FGR_Shorcode {
     }
 
     /**
-     * Inject restriction message post into queries that had courses but all were filtered out
-     * This works at the WordPress query level, universally for any plugin using WP_Query
+     * Detect when a loop starts and check if it's an empty course loop
+     * This works at the WordPress loop level, universally for any plugin using WP_Query
      * 
-     * @param array $posts Array of post objects
      * @param WP_Query $query The WP_Query instance
-     * @return array Modified posts array
      */
-    public function fgr_inject_restriction_message_post( $posts, $query ) {
+    public function fgr_detect_empty_course_loop( $query ) {
         
-        // Skip if not a query that had courses but all were restricted
-        if ( empty( $query->fgr_had_courses ) || empty( $query->fgr_all_courses_restricted ) ) {
-            return $posts;
-        }
-
-        // Skip if we already injected a message for this query
-        if ( ! empty( $query->fgr_message_injected ) ) {
-            return $posts;
-        }
-
         // Skip if in admin, doing AJAX, or REST request
         if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
-            return $posts;
+            return;
         }
 
-        // Create a pseudo-post object for the restriction message
-        $message_post = $this->fgr_create_restriction_message_post();
-        
-        if ( $message_post ) {
-            // Mark this query as having the message injected
-            $query->fgr_message_injected = true;
+        // Check if this query had courses but all were restricted
+        if ( ! empty( $query->fgr_had_courses ) && ! empty( $query->fgr_all_courses_restricted ) ) {
             
-            // Add the message post to the beginning of the posts array
-            array_unshift( $posts, $message_post );
+            // Mark that we need to show a message after this loop
+            $query->fgr_show_message_after_loop = true;
+            
+            // Also set a global flag for this request to prevent duplicates
+            if ( ! $this->no_courses_message_shown ) {
+                $query->fgr_should_display_message = true;
+            }
         }
-
-        return $posts;
     }
 
     /**
-     * Create a pseudo-post object for the restriction message
+     * Display restriction message after empty course loops
+     * This displays the message OUTSIDE the post grid/loop structure
      * 
-     * @return WP_Post|null The message post object
+     * @param WP_Query $query The WP_Query instance
      */
-    private function fgr_create_restriction_message_post() {
+    public function fgr_display_restriction_message_after_loop( $query ) {
         
+        // Skip if in admin, doing AJAX, or REST request
+        if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
+            return;
+        }
+
+        // Only display if this query needs the message and we haven't shown it yet
+        if ( empty( $query->fgr_show_message_after_loop ) || empty( $query->fgr_should_display_message ) ) {
+            return;
+        }
+
+        // Prevent showing the message multiple times on the same page
+        if ( $this->no_courses_message_shown ) {
+            return;
+        }
+
         // Get the custom message from settings
         $fgr_options = get_option( 'fgr-restriction' );
         $custom_message = isset( $fgr_options['fgr-archive-page-message'] ) ? $fgr_options['fgr-archive-page-message'] : '';
@@ -762,58 +765,13 @@ class FGR_Shorcode {
             $custom_message = __( 'All courses are restricted for you.', 'frontend-group-restriction-for-LearnDash' );
         }
 
-        // Create a pseudo-post object
-        $message_post = new stdClass();
-        $message_post->ID = 0;
-        $message_post->post_author = 0;
-        $message_post->post_date = current_time( 'mysql' );
-        $message_post->post_date_gmt = current_time( 'mysql', 1 );
-        $message_post->post_content = $custom_message;
-        $message_post->post_title = __( 'Course Access Restricted', 'frontend-group-restriction-for-LearnDash' );
-        $message_post->post_excerpt = '';
-        $message_post->post_status = 'publish';
-        $message_post->comment_status = 'closed';
-        $message_post->ping_status = 'closed';
-        $message_post->post_password = '';
-        $message_post->post_name = 'fgr-restriction-message';
-        $message_post->to_ping = '';
-        $message_post->pinged = '';
-        $message_post->post_modified = current_time( 'mysql' );
-        $message_post->post_modified_gmt = current_time( 'mysql', 1 );
-        $message_post->post_content_filtered = '';
-        $message_post->post_parent = 0;
-        $message_post->guid = '';
-        $message_post->menu_order = 0;
-        $message_post->post_type = 'fgr_restriction_message';
-        $message_post->post_mime_type = '';
-        $message_post->comment_count = 0;
-        $message_post->filter = 'raw';
+        // Display the message outside the loop structure
+        echo '<div class="fgr-restriction-message" style="padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center;">';
+        echo wpautop( $custom_message );
+        echo '</div>';
 
-        // Convert to WP_Post object
-        return new WP_Post( $message_post );
-    }
-
-    /**
-     * Render the content for restriction message posts
-     * 
-     * @param string $content The post content
-     * @return string Modified content
-     */
-    public function fgr_render_restriction_message_content( $content ) {
-        
-        global $post;
-        
-        // Only process our restriction message posts
-        if ( empty( $post->post_type ) || $post->post_type !== 'fgr_restriction_message' ) {
-            return $content;
-        }
-
-        // Wrap the message in a styled container
-        $styled_content = '<div class="fgr-restriction-message" style="padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center;">';
-        $styled_content .= wpautop( $content );
-        $styled_content .= '</div>';
-
-        return $styled_content;
+        // Mark that we've shown the message
+        $this->no_courses_message_shown = true;
     }
 }
 

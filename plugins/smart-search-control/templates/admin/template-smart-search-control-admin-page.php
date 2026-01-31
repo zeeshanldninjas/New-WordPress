@@ -182,6 +182,28 @@ if ( ! defined( 'ABSPATH' ) ) {
                     }?>
                 </div>
 
+                <!-- Categories Section -->
+                <div class="form-group">
+                    <div class="label-container">
+                        <label class="categories-label"><?php echo esc_html__( 'Categories' , 'smart-search-control' ); ?></label>
+                    </div>
+                    <select name="categories[]" id="categories" class="categories-select" multiple="multiple" disabled>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                    <span class="inputs-desc"><?php echo esc_html__( 'Select categories to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?></span>
+                </div>
+
+                <!-- Tags Section -->
+                <div class="form-group">
+                    <div class="label-container">
+                        <label class="tags-label"><?php echo esc_html__( 'Tags' , 'smart-search-control' ); ?></label>
+                    </div>
+                    <select name="tags[]" id="tags" class="tags-select" multiple="multiple" disabled>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                    <span class="inputs-desc"><?php echo esc_html__( 'Select tags to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?></span>
+                </div>
+
                 <hr>
 
                 <div class="modal-actions">

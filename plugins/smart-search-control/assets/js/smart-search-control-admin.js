@@ -12,6 +12,7 @@
                 this.cacheSelectors();
                 this.bindEvents();
                 this.adminNotice();
+                this.initSelect2();
             },
 
             /**
@@ -35,6 +36,8 @@
                 this.modelClass       = $( "#class" );
                 this.modelID          = $( "#id" );
                 this.modelPostType    = $( "input[name='post_type[]']" );
+                this.categoriesSelect = $( "#categories" );
+                this.tagsSelect       = $( "#tags" );
                 this.modelBtn         = $( ".model-btn" );
                 this.modalForm        = $( "#searchForm" );
             },
@@ -53,6 +56,7 @@
                 this.codeCopy.on( "click", this.copyShortCode.bind( this) );
                 this.selectAll.on( "change", this.selectAllPost.bind( this) );
                 this.singleOptions.on( "change", this.allsingleoptions.bind( this) );
+                this.modelPostType.on( "change", this.loadCategoriesTags.bind( this ) );
             },
 
             /**
@@ -61,6 +65,10 @@
             addNewSetting: function () {
 
                 this.modalForm.trigger( "reset" ).change();
+                
+                // Clear and disable categories/tags for new setting
+                this.categoriesSelect.empty().prop('disabled', true).trigger('change');
+                this.tagsSelect.empty().prop('disabled', true).trigger('change');
                 this.modalForm.off( 'submit' ).on( 'submit', function ( e ) {
                     e.preventDefault();
 
@@ -72,7 +80,9 @@
                         css_id:  AdminSearchSetting.modelID.val(),
                         post_type: $( 'input[name="post_type[]"]:checked' ).map( function () {
                             return $( this ).val();
-                        } ).get()
+                        } ).get(),
+                        categories: AdminSearchSetting.categoriesSelect.val() || [],
+                        tags: AdminSearchSetting.tagsSelect.val() || []
                     };
 
                     let $submitBtn = $( '#submit-btn' );
@@ -146,6 +156,19 @@
                 } else {
                     $( "#select-all" ).prop( "checked", false );
                 }
+
+                // Load categories and tags for selected post types, then populate saved values
+                this.loadCategoriesTags();
+                
+                // Set timeout to allow AJAX to complete before setting values
+                setTimeout(() => {
+                    if (parsedData.categories && Array.isArray(parsedData.categories)) {
+                        this.categoriesSelect.val(parsedData.categories).trigger('change');
+                    }
+                    if (parsedData.tags && Array.isArray(parsedData.tags)) {
+                        this.tagsSelect.val(parsedData.tags).trigger('change');
+                    }
+                }, 500);
                 
                 this.modalForm.off( "submit" ).on( "submit", function ( e ) {
 
@@ -159,7 +182,9 @@
                         css_id:  AdminSearchSetting.modelID.val(),
                         post_type: $( 'input[name="post_type[]"]:checked' ).map( function () {
                             return $( this ).val();
-                        } ).get()
+                        } ).get(),
+                        categories: AdminSearchSetting.categoriesSelect.val() || [],
+                        tags: AdminSearchSetting.tagsSelect.val() || []
                     };
 
                     let $submitBtn = $( '#submit-btn' );
@@ -371,6 +396,97 @@
                         $( this ).closest( ".notice" ).fadeOut().change();
                     });
                 }
+            },
+
+            /**
+             * Initialize Select2 for categories and tags
+             */
+            initSelect2: function () {
+                this.categoriesSelect.select2({
+                    placeholder: 'Select categories...',
+                    allowClear: true,
+                    width: '100%'
+                });
+
+                this.tagsSelect.select2({
+                    placeholder: 'Select tags...',
+                    allowClear: true,
+                    width: '100%'
+                });
+            },
+
+            /**
+             * Load categories and tags based on selected post types
+             */
+            loadCategoriesTags: function () {
+                const selectedPostTypes = [];
+                this.modelPostType.filter(':checked').each(function() {
+                    selectedPostTypes.push($(this).val());
+                });
+
+                if (selectedPostTypes.length === 0) {
+                    // Disable and clear categories/tags if no post types selected
+                    this.categoriesSelect.prop('disabled', true).empty().trigger('change');
+                    this.tagsSelect.prop('disabled', true).empty().trigger('change');
+                    return;
+                }
+
+                // Show loading state
+                this.categoriesSelect.prop('disabled', true);
+                this.tagsSelect.prop('disabled', true);
+
+                $.ajax({
+                    url: SMARSECO_SETTING.ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'smarseco_get_categories_tags',
+                        nonce: SMARSECO_SETTING.nonce_categories_tags,
+                        post_types: selectedPostTypes
+                    },
+                    success: (response) => {
+                        if (response.success) {
+                            // Populate categories
+                            this.categoriesSelect.empty();
+                            if (response.data.categories && Object.keys(response.data.categories).length > 0) {
+                                $.each(response.data.categories, (key, category) => {
+                                    this.categoriesSelect.append(new Option(
+                                        `${category.name} (${category.taxonomy_label})`,
+                                        key,
+                                        false,
+                                        false
+                                    ));
+                                });
+                                this.categoriesSelect.prop('disabled', false);
+                            }
+
+                            // Populate tags
+                            this.tagsSelect.empty();
+                            if (response.data.tags && Object.keys(response.data.tags).length > 0) {
+                                $.each(response.data.tags, (key, tag) => {
+                                    this.tagsSelect.append(new Option(
+                                        `${tag.name} (${tag.taxonomy_label})`,
+                                        key,
+                                        false,
+                                        false
+                                    ));
+                                });
+                                this.tagsSelect.prop('disabled', false);
+                            }
+
+                            // Trigger change to update Select2
+                            this.categoriesSelect.trigger('change');
+                            this.tagsSelect.trigger('change');
+                        } else {
+                            console.error('Failed to load categories and tags:', response.data.message);
+                        }
+                    },
+                    error: (xhr, status, error) => {
+                        console.error('AJAX error:', error);
+                        // Re-enable selects even on error
+                        this.categoriesSelect.prop('disabled', false);
+                        this.tagsSelect.prop('disabled', false);
+                    }
+                });
             }
 
         };

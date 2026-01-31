@@ -16,6 +16,12 @@ class FGR_Shorcode {
     private static $instance = null;
 
     private $no_courses_message_shown = false;
+    
+    /**
+     * Track if we need to display a restriction message
+     * @var bool
+     */
+    private $has_pending_restriction_message = false;
 
     /**
      * @since 1.0
@@ -46,6 +52,10 @@ class FGR_Shorcode {
         // add_filter( 'ld_course_list_shortcode_attr_values', [ $this, 'fgr_make_price_type_empty' ], 10, 2 );
         // add_filter( 'ld_course_list', [ $this, 'fgr_ld_course_list' ], 10, 3 );
         add_action( 'wp_ajax_fgr_group_records', [ $this, 'fgr_group_records' ] );
+        
+        // Universal query-level solution for empty course listings
+        add_filter( 'the_posts', [ $this, 'fgr_detect_and_handle_empty_course_queries' ], 10, 2 );
+        add_action( 'wp_footer', [ $this, 'fgr_display_pending_restriction_messages' ], 5 );
     }
 
     /**
@@ -346,42 +356,39 @@ class FGR_Shorcode {
 		}
 
         $visible_courses = 0;
+        $original_course_count = 0;
 
-        foreach ( $posts as $key => $post ) {
-            
-            if ( empty( $post->post_type ) || $post->post_type !== 'sfwd-courses' ) {
-                continue;
-            }
-
-            if ( 'on' !== $hide_post ) {
-                continue;
-            }
-
-            if ( FGR_Helper::is_course_hidden_for_user( $post->ID, $user_id ) ) {
-                unset( $posts[ $key ] );
-            } else {
-                $visible_courses++;
+        // First pass: count original courses in the query
+        foreach ( $posts as $post ) {
+            if ( ! empty( $post->post_type ) && $post->post_type === 'sfwd-courses' ) {
+                $original_course_count++;
             }
         }
 
-        /**
-         * If all courses are restricted
-         */
-        if ( $query->get( 'post_type' ) === 'sfwd-courses' && $visible_courses === 0 && ! $this->no_courses_message_shown ) {
+        // Store original course presence on the query object for later use
+        if ( $original_course_count > 0 ) {
+            $query->fgr_had_courses = true;
+            $query->fgr_original_course_count = $original_course_count;
+        }
 
-            $this->no_courses_message_shown = true;
-            $custom_message = isset( $fgr_options['fgr-archive-page-message'] ) ? $fgr_options['fgr-archive-page-message'] : '';
+        // Second pass: apply restrictions if enabled
+        if ( 'on' === $hide_post && $original_course_count > 0 ) {
+            foreach ( $posts as $key => $post ) {
+                
+                if ( empty( $post->post_type ) || $post->post_type !== 'sfwd-courses' ) {
+                    continue;
+                }
 
-            global $wpdb;
-            $p_id = $wpdb->get_var( $wpdb->prepare(
-                " SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s ORDER BY ID ASC LIMIT 1 ", 
-                'fgr',
-                'publish'
-            ) );
+                if ( FGR_Helper::is_course_hidden_for_user( $post->ID, $user_id ) ) {
+                    unset( $posts[ $key ] );
+                } else {
+                    $visible_courses++;
+                }
+            }
 
-            $fgr_wp_post = get_post( $p_id );
-            if ( $fgr_wp_post instanceof WP_Post ) { 
-                $posts[] = $fgr_wp_post;
+            // Track if ALL courses were filtered out - store on query object
+            if ( $visible_courses === 0 ) {
+                $query->fgr_all_courses_restricted = true;
             }
         }
 
@@ -705,6 +712,126 @@ class FGR_Shorcode {
                 'courses'     => $courses_data,
             ]
         );
+    }
+
+    /**
+     * Detect empty course queries and set flag for message display
+     * This works at the WordPress query level, universally for any plugin using WP_Query
+     * 
+     * @param array $posts Array of post objects
+     * @param WP_Query $query The WP_Query instance
+     * @return array Unmodified posts array
+     */
+    public function fgr_detect_and_handle_empty_course_queries( $posts, $query ) {
+        
+        // Skip if in admin, doing AJAX, or REST request
+        if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
+            return $posts;
+        }
+
+        // Check if this query had courses but all were restricted
+        if ( ! empty( $query->fgr_had_courses ) && ! empty( $query->fgr_all_courses_restricted ) ) {
+            
+            // Set flag to display message later
+            if ( ! $this->no_courses_message_shown ) {
+                $this->has_pending_restriction_message = true;
+            }
+        }
+
+        return $posts;
+    }
+
+    /**
+     * Display pending restriction messages in wp_footer
+     * This ensures the message displays regardless of theme/plugin implementation
+     */
+    public function fgr_display_pending_restriction_messages() {
+        
+        // Skip if in admin, doing AJAX, or REST request
+        if ( is_admin() || wp_doing_ajax() || defined( 'REST_REQUEST' ) ) {
+            return;
+        }
+
+        // Only display if we have a pending message and haven't shown it yet
+        if ( ! $this->has_pending_restriction_message || $this->no_courses_message_shown ) {
+            return;
+        }
+
+        // Get the custom message from settings
+        $fgr_options = get_option( 'fgr-restriction' );
+        $custom_message = isset( $fgr_options['fgr-archive-page-message'] ) ? $fgr_options['fgr-archive-page-message'] : '';
+        
+        if ( empty( $custom_message ) ) {
+            $custom_message = __( 'All courses are restricted for you.', 'frontend-group-restriction-for-LearnDash' );
+        }
+
+        // Use JavaScript to inject the message into the page content
+        ?>
+        <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find potential course listing containers
+            var containers = [
+                // LearnDash specific containers
+                document.querySelector('.ld-course-list'),
+                document.querySelector('.learndash-course-list'),
+                document.querySelector('[class*="ld-course"]'),
+                
+                // Generic course containers
+                document.querySelector('.courses'),
+                document.querySelector('.course-list'),
+                document.querySelector('.course-grid'),
+                
+                // Archive containers
+                document.querySelector('.post-type-archive-sfwd-courses'),
+                document.querySelector('[class*="archive"]'),
+                
+                // Main content areas
+                document.querySelector('main'),
+                document.querySelector('.content'),
+                document.querySelector('#content'),
+                document.querySelector('.site-content'),
+                
+                // Fallback to body
+                document.body
+            ];
+            
+            // Find the first available container
+            var targetContainer = null;
+            for (var i = 0; i < containers.length; i++) {
+                if (containers[i]) {
+                    targetContainer = containers[i];
+                    break;
+                }
+            }
+            
+            if (targetContainer) {
+                // Create the message element
+                var messageDiv = document.createElement('div');
+                messageDiv.className = 'fgr-restriction-message';
+                messageDiv.style.cssText = 'padding: 20px; margin: 20px 0; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; text-align: center; clear: both;';
+                messageDiv.innerHTML = <?php echo json_encode( wpautop( $custom_message ) ); ?>;
+                
+                // Insert the message
+                if (targetContainer === document.body) {
+                    // If using body as fallback, try to insert after main content
+                    var mainContent = document.querySelector('main') || document.querySelector('.content') || document.querySelector('#content');
+                    if (mainContent) {
+                        mainContent.appendChild(messageDiv);
+                    } else {
+                        targetContainer.appendChild(messageDiv);
+                    }
+                } else {
+                    // Insert at the beginning of the container
+                    targetContainer.insertBefore(messageDiv, targetContainer.firstChild);
+                }
+            }
+        });
+        </script>
+        <?php
+
+        // Mark that we've shown the message
+        $this->no_courses_message_shown = true;
+        $this->has_pending_restriction_message = false;
     }
 }
 

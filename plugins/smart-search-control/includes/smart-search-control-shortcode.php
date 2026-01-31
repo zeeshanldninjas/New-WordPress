@@ -129,6 +129,8 @@ class SMARSECO_Smart_Search_Control_Short_Code {
         $class       = $sanitized_atts[ 'css_class' ];
         $css_id      = $sanitized_atts[ 'css_id' ];
         $placeholder = $sanitized_atts[ 'place_holder' ];
+        $categories  = [];
+        $tags        = [];
     
         if( ! empty( $result ) && isset( $result->data ) ) {
 
@@ -136,6 +138,11 @@ class SMARSECO_Smart_Search_Control_Short_Code {
             $class       = isset( $data->class ) ? $data->class : $class;
             $css_id      = isset( $data->css_id ) ? $data->css_id : $css_id;
             $placeholder = isset( $data->place_holder ) ? $data->place_holder : $placeholder;
+            
+            // Extract categories and tags
+            $categories  = isset( $data->categories ) && is_array( $data->categories ) ? $data->categories : [];
+            $tags        = isset( $data->tags ) && is_array( $data->tags ) ? $data->tags : [];
+            
             if ( isset( $data->post_type ) && !empty( $data->post_type ) ) {
                 if ( is_array( $data->post_type ) ) {
                     $posts_types = $data->post_type;
@@ -192,6 +199,14 @@ class SMARSECO_Smart_Search_Control_Short_Code {
         $ssc_id = isset( $_POST['ssc_id'] ) 
             ? intval( $_POST['ssc_id'] )
             : 0;
+            
+        // Get categories and tags from AJAX request
+        $ajax_categories = isset( $_POST['categories'] ) && is_array( $_POST['categories'] ) 
+            ? array_map( 'sanitize_text_field', wp_unslash( $_POST['categories'] ) ) 
+            : [];
+        $ajax_tags = isset( $_POST['tags'] ) && is_array( $_POST['tags'] ) 
+            ? array_map( 'sanitize_text_field', wp_unslash( $_POST['tags'] ) ) 
+            : [];
 
         // Check if this is a Gutenberg block search with post types
         if ( isset( $_POST['block_post_types'] ) && ! empty( $_POST['block_post_types'] ) ) {
@@ -232,8 +247,14 @@ class SMARSECO_Smart_Search_Control_Short_Code {
                 } else {
                     $posts_types = $all_public_post_types;
                 }
+                
+                // Extract categories and tags for filtering
+                $stored_categories = isset( $data->categories ) && is_array( $data->categories ) ? $data->categories : [];
+                $stored_tags = isset( $data->tags ) && is_array( $data->tags ) ? $data->tags : [];
             } else {
                 $posts_types = $all_public_post_types;
+                $stored_categories = [];
+                $stored_tags = [];
             }
         } // End of else block for shortcode-based searches
         
@@ -249,6 +270,16 @@ class SMARSECO_Smart_Search_Control_Short_Code {
             'posts_per_page'=> $post_per_page,
             'post_status'   => 'publish',
         ];
+        
+        // Merge AJAX categories/tags with stored ones (AJAX takes precedence)
+        $final_categories = ! empty( $ajax_categories ) ? $ajax_categories : $stored_categories;
+        $final_tags = ! empty( $ajax_tags ) ? $ajax_tags : $stored_tags;
+        
+        // Add taxonomy filtering if categories or tags are selected
+        $tax_query = $this->smarseco_build_tax_query( $final_categories, $final_tags );
+        if ( ! empty( $tax_query ) ) {
+            $args['tax_query'] = $tax_query;
+        }
         $query = new WP_Query( $args );
         $posts = [];
         if ( $query->have_posts() ) {
@@ -283,6 +314,73 @@ class SMARSECO_Smart_Search_Control_Short_Code {
 
         $exists = SMARSECO_Smart_Search_Control::smarseco_smart_search_control_create_table();
         return $exists;
+    }
+    
+    /**
+     * Build taxonomy query for categories and tags filtering
+     * 
+     * @param array $categories Array of category taxonomy:term_id strings
+     * @param array $tags Array of tag taxonomy:term_id strings
+     * @return array Tax query array for WP_Query
+     */
+    private function smarseco_build_tax_query( $categories = [], $tags = [] ) {
+        
+        $tax_query = [];
+        
+        if ( empty( $categories ) && empty( $tags ) ) {
+            return $tax_query;
+        }
+        
+        // Group terms by taxonomy
+        $taxonomy_terms = [];
+        
+        // Process categories
+        foreach ( $categories as $category ) {
+            if ( strpos( $category, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $category, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
+                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
+                        $taxonomy_terms[ $taxonomy ] = [];
+                    }
+                    $taxonomy_terms[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+        
+        // Process tags
+        foreach ( $tags as $tag ) {
+            if ( strpos( $tag, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $tag, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
+                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
+                        $taxonomy_terms[ $taxonomy ] = [];
+                    }
+                    $taxonomy_terms[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+        
+        // Build tax_query
+        if ( ! empty( $taxonomy_terms ) ) {
+            $tax_query['relation'] = 'AND'; // Posts must match all selected taxonomies
+            
+            foreach ( $taxonomy_terms as $taxonomy => $term_ids ) {
+                $tax_query[] = [
+                    'taxonomy' => $taxonomy,
+                    'field'    => 'term_id',
+                    'terms'    => array_unique( $term_ids ),
+                    'operator' => 'IN' // Posts can match any of the selected terms within this taxonomy
+                ];
+            }
+        }
+        
+        return $tax_query;
     }
 }
 SMARSECO_Smart_Search_Control_Short_Code::instance();

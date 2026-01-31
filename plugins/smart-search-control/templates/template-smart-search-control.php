@@ -17,6 +17,19 @@ if ( !defined( 'ABSPATH' ) ) {
             <!-- Hidden Post Type Input -->
             <input type="hidden" name="smartsearch" value="<?php echo esc_attr( $ssc_id); ?>">
             <input type="hidden" name="nonce" value="<?php echo esc_attr( wp_create_nonce( 'ssc_search_nonce' ) ); ?>">
+            
+            <!-- Hidden Categories and Tags Inputs -->
+            <?php if ( ! empty( $categories ) ) : ?>
+                <?php foreach ( $categories as $category ) : ?>
+                    <input type="hidden" name="categories[]" value="<?php echo esc_attr( $category ); ?>">
+                <?php endforeach; ?>
+            <?php endif; ?>
+            
+            <?php if ( ! empty( $tags ) ) : ?>
+                <?php foreach ( $tags as $tag ) : ?>
+                    <input type="hidden" name="tags[]" value="<?php echo esc_attr( $tag ); ?>">
+                <?php endforeach; ?>
+            <?php endif; ?>
 
             <?php
 

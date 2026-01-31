@@ -71,6 +71,14 @@ class SMARSECO_Smart_Search_Control_Result {
 
             $search_query = sanitize_text_field( wp_unslash( $_GET['query'] ) );
             $ssc_id = isset( $_GET['smartsearch'] ) ? absint( $_GET['smartsearch'] ) : 0;
+            
+            // Get categories and tags from URL parameters
+            $url_categories = isset( $_GET['categories'] ) && is_array( $_GET['categories'] ) 
+                ? array_map( 'sanitize_text_field', wp_unslash( $_GET['categories'] ) ) 
+                : [];
+            $url_tags = isset( $_GET['tags'] ) && is_array( $_GET['tags'] ) 
+                ? array_map( 'sanitize_text_field', wp_unslash( $_GET['tags'] ) ) 
+                : [];
 
             // Check if this is a Gutenberg block search with post types
             if ( isset( $_GET['block_post_types'] ) && ! empty( $_GET['block_post_types'] ) ) {
@@ -106,18 +114,32 @@ class SMARSECO_Smart_Search_Control_Result {
                             $posts_types = array_map( 'trim', explode( ',', $data->post_type ) );
                         }
                     }
+                    
+                    // Extract categories and tags from stored configuration
+                    $stored_categories = isset( $data->categories ) && is_array( $data->categories ) ? $data->categories : [];
+                    $stored_tags = isset( $data->tags ) && is_array( $data->tags ) ? $data->tags : [];
+                } else {
+                    $stored_categories = [];
+                    $stored_tags = [];
                 }
             } // End of else block for shortcode-based searches
 
             if ( in_array( 'product', $posts_types, true ) && ! in_array( 'product_variation', $posts_types, true ) ) {
                 $posts_types[] = 'product_variation';
             }
+            
+            // Merge URL parameters with stored configuration (URL parameters take precedence)
+            $final_categories = ! empty( $url_categories ) ? $url_categories : ( isset( $stored_categories ) ? $stored_categories : [] );
+            $final_tags = ! empty( $url_tags ) ? $url_tags : ( isset( $stored_tags ) ? $stored_tags : [] );
+            
             $shortcode_content = '[smart_search_control id="' . esc_attr( $ssc_id ) . '"]';
 
         } else {
 
             $search_query = null;
             $posts_types = $all_public_post_types;
+            $final_categories = [];
+            $final_tags = [];
             $shortcode_content = '[smart_search_control id="0"]';
         }
 
@@ -138,6 +160,12 @@ class SMARSECO_Smart_Search_Control_Result {
             'post_status'    => 'publish',
             'paged' => get_query_var( 'paged', 1 ),
         ];
+        
+        // Add taxonomy filtering if categories or tags are selected
+        $tax_query = $this->smarseco_build_tax_query( $final_categories, $final_tags );
+        if ( ! empty( $tax_query ) ) {
+            $args['tax_query'] = $tax_query;
+        }
         
         $query = new WP_Query( $args );
 
@@ -170,6 +198,73 @@ class SMARSECO_Smart_Search_Control_Result {
 
         $result = SMARSECO_Smart_Search_Control::smarseco_smart_search_control_create_table();
         return $result;
+    }
+    
+    /**
+     * Build taxonomy query for categories and tags filtering
+     * 
+     * @param array $categories Array of category taxonomy:term_id strings
+     * @param array $tags Array of tag taxonomy:term_id strings
+     * @return array Tax query array for WP_Query
+     */
+    private function smarseco_build_tax_query( $categories = [], $tags = [] ) {
+        
+        $tax_query = [];
+        
+        if ( empty( $categories ) && empty( $tags ) ) {
+            return $tax_query;
+        }
+        
+        // Group terms by taxonomy
+        $taxonomy_terms = [];
+        
+        // Process categories
+        foreach ( $categories as $category ) {
+            if ( strpos( $category, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $category, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
+                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
+                        $taxonomy_terms[ $taxonomy ] = [];
+                    }
+                    $taxonomy_terms[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+        
+        // Process tags
+        foreach ( $tags as $tag ) {
+            if ( strpos( $tag, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $tag, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
+                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
+                        $taxonomy_terms[ $taxonomy ] = [];
+                    }
+                    $taxonomy_terms[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+        
+        // Build tax_query
+        if ( ! empty( $taxonomy_terms ) ) {
+            $tax_query['relation'] = 'AND'; // Posts must match all selected taxonomies
+            
+            foreach ( $taxonomy_terms as $taxonomy => $term_ids ) {
+                $tax_query[] = [
+                    'taxonomy' => $taxonomy,
+                    'field'    => 'term_id',
+                    'terms'    => array_unique( $term_ids ),
+                    'operator' => 'IN' // Posts can match any of the selected terms within this taxonomy
+                ];
+            }
+        }
+        
+        return $tax_query;
     }
 }
 SMARSECO_Smart_Search_Control_Result::instance();

@@ -19,15 +19,23 @@ if ( !defined( 'ABSPATH' ) ) {
             <input type="hidden" name="nonce" value="<?php echo esc_attr( wp_create_nonce( 'ssc_search_nonce' ) ); ?>">
             
             <!-- Hidden Categories and Tags Inputs -->
-            <?php if ( ! empty( $categories ) ) : ?>
-                <?php foreach ( $categories as $category ) : ?>
-                    <input type="hidden" name="categories[]" value="<?php echo esc_attr( $category ); ?>">
+            <?php if ( ! empty( $categories ) && is_array( $categories ) ) : ?>
+                <?php foreach ( $categories as $taxonomy => $term_ids ) : ?>
+                    <?php if ( ! empty( $term_ids ) && is_array( $term_ids ) ) : ?>
+                        <?php foreach ( $term_ids as $term_id ) : ?>
+                            <input type="hidden" name="categories[]" value="<?php echo esc_attr( $taxonomy . ':' . $term_id ); ?>">
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             <?php endif; ?>
             
-            <?php if ( ! empty( $tags ) ) : ?>
-                <?php foreach ( $tags as $tag ) : ?>
-                    <input type="hidden" name="tags[]" value="<?php echo esc_attr( $tag ); ?>">
+            <?php if ( ! empty( $tags ) && is_array( $tags ) ) : ?>
+                <?php foreach ( $tags as $taxonomy => $term_ids ) : ?>
+                    <?php if ( ! empty( $term_ids ) && is_array( $term_ids ) ) : ?>
+                        <?php foreach ( $term_ids as $term_id ) : ?>
+                            <input type="hidden" name="tags[]" value="<?php echo esc_attr( $taxonomy . ':' . $term_id ); ?>">
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 <?php endforeach; ?>
             <?php endif; ?>
 

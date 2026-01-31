@@ -234,13 +234,17 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
         $tags         = isset( $_POST[ 'tags' ] ) && !empty( $_POST[ 'tags' ] ) 
             ? array_map( 'sanitize_text_field', wp_unslash( $_POST[ 'tags' ] ) ) 
             : [];
+            
+        // Convert to new grouped format
+        $grouped_taxonomy_data = smarseco_group_taxonomy_data( $categories, $tags );
+        
         $data = json_encode([
             'place_holder' => $place_holder,
             'css_id'       => $css_id,
             'class'        => $class,
             'post_type'    => $post_types,
-            'categories'   => $categories,
-            'tags'         => $tags
+            'categories'   => $grouped_taxonomy_data['categories'],
+            'tags'         => $grouped_taxonomy_data['tags']
         ]);
         
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -302,13 +306,16 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             ? array_map( 'sanitize_text_field', wp_unslash( $_POST[ 'tags' ] ) ) 
             : [];
 
+        // Convert to new grouped format
+        $grouped_taxonomy_data = smarseco_group_taxonomy_data( $categories, $tags );
+
         $data = json_encode([
             'place_holder' => $place_holder,
             'css_id'       => $css_id,
             'class'        => $class,
             'post_type'    => $post_types,
-            'categories'   => $categories,
-            'tags'         => $tags
+            'categories'   => $grouped_taxonomy_data['categories'],
+            'tags'         => $grouped_taxonomy_data['tags']
         ]);
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery

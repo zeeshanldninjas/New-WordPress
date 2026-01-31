@@ -115,3 +115,128 @@ function smarseco_get_tags_for_post_types( $post_types = [] ) {
     
     return apply_filters( 'smarseco_tags_for_post_types', $tags, $post_types );
 }
+
+/**
+ * Check if taxonomy data is in old format (taxonomy:term_id strings)
+ * 
+ * @param array $data Array of taxonomy data
+ * @return bool True if old format, false if new format
+ */
+function smarseco_is_old_format( $data ) {
+    if ( empty( $data ) || ! is_array( $data ) ) {
+        return false;
+    }
+    
+    // Check if first element is a string with colon separator
+    $first_element = reset( $data );
+    return is_string( $first_element ) && strpos( $first_element, ':' ) !== false;
+}
+
+/**
+ * Convert old format taxonomy data to new grouped format
+ * 
+ * @param array $categories Array of category strings in "taxonomy:term_id" format
+ * @param array $tags Array of tag strings in "taxonomy:term_id" format
+ * @return array Grouped format: ['categories' => ['taxonomy' => [term_ids]], 'tags' => ['taxonomy' => [term_ids]]]
+ */
+function smarseco_convert_to_new_format( $categories = [], $tags = [] ) {
+    $grouped_data = [
+        'categories' => [],
+        'tags' => []
+    ];
+    
+    // Process categories
+    if ( ! empty( $categories ) && is_array( $categories ) ) {
+        foreach ( $categories as $category_string ) {
+            if ( is_string( $category_string ) && strpos( $category_string, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $category_string, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( ! isset( $grouped_data['categories'][ $taxonomy ] ) ) {
+                    $grouped_data['categories'][ $taxonomy ] = [];
+                }
+                
+                if ( ! in_array( $term_id, $grouped_data['categories'][ $taxonomy ] ) ) {
+                    $grouped_data['categories'][ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+    }
+    
+    // Process tags
+    if ( ! empty( $tags ) && is_array( $tags ) ) {
+        foreach ( $tags as $tag_string ) {
+            if ( is_string( $tag_string ) && strpos( $tag_string, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $tag_string, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( ! isset( $grouped_data['tags'][ $taxonomy ] ) ) {
+                    $grouped_data['tags'][ $taxonomy ] = [];
+                }
+                
+                if ( ! in_array( $term_id, $grouped_data['tags'][ $taxonomy ] ) ) {
+                    $grouped_data['tags'][ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+    }
+    
+    return $grouped_data;
+}
+
+/**
+ * Convert categories and tags arrays to new grouped format for saving
+ * 
+ * @param array $categories Array of category strings in "taxonomy:term_id" format
+ * @param array $tags Array of tag strings in "taxonomy:term_id" format
+ * @return array Grouped format ready for JSON encoding
+ */
+function smarseco_group_taxonomy_data( $categories = [], $tags = [] ) {
+    $grouped_categories = [];
+    $grouped_tags = [];
+    
+    // Group categories by taxonomy
+    if ( ! empty( $categories ) && is_array( $categories ) ) {
+        foreach ( $categories as $category_string ) {
+            if ( is_string( $category_string ) && strpos( $category_string, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $category_string, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( ! isset( $grouped_categories[ $taxonomy ] ) ) {
+                    $grouped_categories[ $taxonomy ] = [];
+                }
+                
+                if ( ! in_array( $term_id, $grouped_categories[ $taxonomy ] ) ) {
+                    $grouped_categories[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+    }
+    
+    // Group tags by taxonomy
+    if ( ! empty( $tags ) && is_array( $tags ) ) {
+        foreach ( $tags as $tag_string ) {
+            if ( is_string( $tag_string ) && strpos( $tag_string, ':' ) !== false ) {
+                list( $taxonomy, $term_id ) = explode( ':', $tag_string, 2 );
+                $taxonomy = sanitize_text_field( $taxonomy );
+                $term_id = intval( $term_id );
+                
+                if ( ! isset( $grouped_tags[ $taxonomy ] ) ) {
+                    $grouped_tags[ $taxonomy ] = [];
+                }
+                
+                if ( ! in_array( $term_id, $grouped_tags[ $taxonomy ] ) ) {
+                    $grouped_tags[ $taxonomy ][] = $term_id;
+                }
+            }
+        }
+    }
+    
+    return [
+        'categories' => $grouped_categories,
+        'tags' => $grouped_tags
+    ];
+}

@@ -115,9 +115,21 @@ class SMARSECO_Smart_Search_Control_Result {
                         }
                     }
                     
-                    // Extract categories and tags from stored configuration
-                    $stored_categories = isset( $data->categories ) && is_array( $data->categories ) ? $data->categories : [];
-                    $stored_tags = isset( $data->tags ) && is_array( $data->tags ) ? $data->tags : [];
+                    // Extract categories and tags from stored configuration with backward compatibility
+                    $raw_categories = isset( $data->categories ) ? $data->categories : [];
+                    $raw_tags = isset( $data->tags ) ? $data->tags : [];
+                    
+                    // Handle both old and new formats
+                    if ( is_array( $raw_categories ) && smarseco_is_old_format( $raw_categories ) ) {
+                        // Old format: convert to new format
+                        $converted_data = smarseco_convert_to_new_format( $raw_categories, $raw_tags );
+                        $stored_categories = $converted_data['categories'];
+                        $stored_tags = $converted_data['tags'];
+                    } else {
+                        // New format: use directly (categories/tags are already grouped by taxonomy)
+                        $stored_categories = is_object( $raw_categories ) ? (array) $raw_categories : ( is_array( $raw_categories ) ? $raw_categories : [] );
+                        $stored_tags = is_object( $raw_tags ) ? (array) $raw_tags : ( is_array( $raw_tags ) ? $raw_tags : [] );
+                    }
                 } else {
                     $stored_categories = [];
                     $stored_tags = [];
@@ -203,8 +215,8 @@ class SMARSECO_Smart_Search_Control_Result {
     /**
      * Build taxonomy query for categories and tags filtering
      * 
-     * @param array $categories Array of category taxonomy:term_id strings
-     * @param array $tags Array of tag taxonomy:term_id strings
+     * @param array $categories Array of grouped categories: ['taxonomy' => [term_ids]]
+     * @param array $tags Array of grouped tags: ['taxonomy' => [term_ids]]
      * @return array Tax query array for WP_Query
      */
     private function smarseco_build_tax_query( $categories = [], $tags = [] ) {
@@ -215,46 +227,52 @@ class SMARSECO_Smart_Search_Control_Result {
             return $tax_query;
         }
         
-        // Group terms by taxonomy
-        $taxonomy_terms = [];
+        // Combine all taxonomies from categories and tags
+        $all_taxonomies = [];
         
-        // Process categories
-        foreach ( $categories as $category ) {
-            if ( strpos( $category, ':' ) !== false ) {
-                list( $taxonomy, $term_id ) = explode( ':', $category, 2 );
+        // Process categories (already grouped by taxonomy)
+        if ( ! empty( $categories ) && is_array( $categories ) ) {
+            foreach ( $categories as $taxonomy => $term_ids ) {
                 $taxonomy = sanitize_text_field( $taxonomy );
-                $term_id = intval( $term_id );
-                
-                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
-                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
-                        $taxonomy_terms[ $taxonomy ] = [];
+                if ( taxonomy_exists( $taxonomy ) && ! empty( $term_ids ) && is_array( $term_ids ) ) {
+                    $valid_term_ids = array_filter( array_map( 'intval', $term_ids ), function( $id ) {
+                        return $id > 0;
+                    });
+                    
+                    if ( ! empty( $valid_term_ids ) ) {
+                        if ( ! isset( $all_taxonomies[ $taxonomy ] ) ) {
+                            $all_taxonomies[ $taxonomy ] = [];
+                        }
+                        $all_taxonomies[ $taxonomy ] = array_merge( $all_taxonomies[ $taxonomy ], $valid_term_ids );
                     }
-                    $taxonomy_terms[ $taxonomy ][] = $term_id;
                 }
             }
         }
         
-        // Process tags
-        foreach ( $tags as $tag ) {
-            if ( strpos( $tag, ':' ) !== false ) {
-                list( $taxonomy, $term_id ) = explode( ':', $tag, 2 );
+        // Process tags (already grouped by taxonomy)
+        if ( ! empty( $tags ) && is_array( $tags ) ) {
+            foreach ( $tags as $taxonomy => $term_ids ) {
                 $taxonomy = sanitize_text_field( $taxonomy );
-                $term_id = intval( $term_id );
-                
-                if ( $term_id > 0 && taxonomy_exists( $taxonomy ) ) {
-                    if ( ! isset( $taxonomy_terms[ $taxonomy ] ) ) {
-                        $taxonomy_terms[ $taxonomy ] = [];
+                if ( taxonomy_exists( $taxonomy ) && ! empty( $term_ids ) && is_array( $term_ids ) ) {
+                    $valid_term_ids = array_filter( array_map( 'intval', $term_ids ), function( $id ) {
+                        return $id > 0;
+                    });
+                    
+                    if ( ! empty( $valid_term_ids ) ) {
+                        if ( ! isset( $all_taxonomies[ $taxonomy ] ) ) {
+                            $all_taxonomies[ $taxonomy ] = [];
+                        }
+                        $all_taxonomies[ $taxonomy ] = array_merge( $all_taxonomies[ $taxonomy ], $valid_term_ids );
                     }
-                    $taxonomy_terms[ $taxonomy ][] = $term_id;
                 }
             }
         }
         
         // Build tax_query
-        if ( ! empty( $taxonomy_terms ) ) {
+        if ( ! empty( $all_taxonomies ) ) {
             $tax_query['relation'] = 'AND'; // Posts must match all selected taxonomies
             
-            foreach ( $taxonomy_terms as $taxonomy => $term_ids ) {
+            foreach ( $all_taxonomies as $taxonomy => $term_ids ) {
                 $tax_query[] = [
                     'taxonomy' => $taxonomy,
                     'field'    => 'term_id',

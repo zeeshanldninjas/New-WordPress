@@ -139,21 +139,13 @@ class SMARSECO_Smart_Search_Control_Short_Code {
             $css_id      = isset( $data->css_id ) ? $data->css_id : $css_id;
             $placeholder = isset( $data->place_holder ) ? $data->place_holder : $placeholder;
             
-            // Extract categories and tags with backward compatibility
-            $stored_categories = isset( $data->categories ) ? $data->categories : [];
-            $stored_tags = isset( $data->tags ) ? $data->tags : [];
+            // Extract categories and tags (new grouped format)
+            $categories = isset( $data->categories ) ? $data->categories : [];
+            $tags = isset( $data->tags ) ? $data->tags : [];
             
-            // Handle both old and new formats
-            if ( is_array( $stored_categories ) && smarseco_is_old_format( $stored_categories ) ) {
-                // Old format: convert to new format
-                $converted_data = smarseco_convert_to_new_format( $stored_categories, $stored_tags );
-                $categories = $converted_data['categories'];
-                $tags = $converted_data['tags'];
-            } else {
-                // New format: use directly (categories/tags are already grouped by taxonomy)
-                $categories = is_object( $stored_categories ) ? (array) $stored_categories : ( is_array( $stored_categories ) ? $stored_categories : [] );
-                $tags = is_object( $stored_tags ) ? (array) $stored_tags : ( is_array( $stored_tags ) ? $stored_tags : [] );
-            }
+            // Convert objects to arrays if needed
+            $categories = is_object( $categories ) ? (array) $categories : ( is_array( $categories ) ? $categories : [] );
+            $tags = is_object( $tags ) ? (array) $tags : ( is_array( $tags ) ? $tags : [] );
             
             if ( isset( $data->post_type ) && !empty( $data->post_type ) ) {
                 if ( is_array( $data->post_type ) ) {

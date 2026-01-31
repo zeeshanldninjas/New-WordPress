@@ -115,21 +115,13 @@ class SMARSECO_Smart_Search_Control_Result {
                         }
                     }
                     
-                    // Extract categories and tags from stored configuration with backward compatibility
-                    $raw_categories = isset( $data->categories ) ? $data->categories : [];
-                    $raw_tags = isset( $data->tags ) ? $data->tags : [];
+                    // Extract categories and tags from stored configuration (new grouped format)
+                    $stored_categories = isset( $data->categories ) ? $data->categories : [];
+                    $stored_tags = isset( $data->tags ) ? $data->tags : [];
                     
-                    // Handle both old and new formats
-                    if ( is_array( $raw_categories ) && smarseco_is_old_format( $raw_categories ) ) {
-                        // Old format: convert to new format
-                        $converted_data = smarseco_convert_to_new_format( $raw_categories, $raw_tags );
-                        $stored_categories = $converted_data['categories'];
-                        $stored_tags = $converted_data['tags'];
-                    } else {
-                        // New format: use directly (categories/tags are already grouped by taxonomy)
-                        $stored_categories = is_object( $raw_categories ) ? (array) $raw_categories : ( is_array( $raw_categories ) ? $raw_categories : [] );
-                        $stored_tags = is_object( $raw_tags ) ? (array) $raw_tags : ( is_array( $raw_tags ) ? $raw_tags : [] );
-                    }
+                    // Convert objects to arrays if needed
+                    $stored_categories = is_object( $stored_categories ) ? (array) $stored_categories : ( is_array( $stored_categories ) ? $stored_categories : [] );
+                    $stored_tags = is_object( $stored_tags ) ? (array) $stored_tags : ( is_array( $stored_tags ) ? $stored_tags : [] );
                 } else {
                     $stored_categories = [];
                     $stored_tags = [];

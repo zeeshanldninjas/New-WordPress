@@ -270,55 +270,33 @@
                     const $ = window.jQuery;
                     
                     // Initialize Categories Select2
-                    if (categoriesSelectRef.current) {
-                        // Destroy existing Select2 if it exists
-                        if ($(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
-                            $(categoriesSelectRef.current).select2('destroy');
-                        }
+                    if (categoriesSelectRef.current && !$(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
+                        $(categoriesSelectRef.current).select2({
+                            placeholder: "Select categories",
+                            allowClear: true,
+                            width: '100%'
+                        });
                         
-                        // Check if element is visible and has options
-                        if (categoriesSelectRef.current.offsetParent !== null && categoriesSelectRef.current.options.length > 0) {
-                            $(categoriesSelectRef.current).select2({
-                                placeholder: "Select categories",
-                                allowClear: true,
-                                width: '100%'
-                            });
-                            
-                            // Remove any existing event handlers to prevent duplicates
-                            $(categoriesSelectRef.current).off('change.select2-custom');
-                            
-                            // Handle Select2 change events with namespace
-                            $(categoriesSelectRef.current).on('change.select2-custom', function() {
-                                const selectedValues = $(this).val() || [];
-                                handleCategoriesChange(selectedValues);
-                            });
-                        }
+                        // Handle Select2 change events
+                        $(categoriesSelectRef.current).on('change', function() {
+                            const selectedValues = $(this).val() || [];
+                            handleCategoriesChange(selectedValues);
+                        });
                     }
                     
                     // Initialize Tags Select2
-                    if (tagsSelectRef.current) {
-                        // Destroy existing Select2 if it exists
-                        if ($(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
-                            $(tagsSelectRef.current).select2('destroy');
-                        }
+                    if (tagsSelectRef.current && !$(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
+                        $(tagsSelectRef.current).select2({
+                            placeholder: "Select tags",
+                            allowClear: true,
+                            width: '100%'
+                        });
                         
-                        // Check if element is visible and has options
-                        if (tagsSelectRef.current.offsetParent !== null && tagsSelectRef.current.options.length > 0) {
-                            $(tagsSelectRef.current).select2({
-                                placeholder: "Select tags",
-                                allowClear: true,
-                                width: '100%'
-                            });
-                            
-                            // Remove any existing event handlers to prevent duplicates
-                            $(tagsSelectRef.current).off('change.select2-custom');
-                            
-                            // Handle Select2 change events with namespace
-                            $(tagsSelectRef.current).on('change.select2-custom', function() {
-                                const selectedValues = $(this).val() || [];
-                                handleTagsChange(selectedValues);
-                            });
-                        }
+                        // Handle Select2 change events
+                        $(tagsSelectRef.current).on('change', function() {
+                            const selectedValues = $(this).val() || [];
+                            handleTagsChange(selectedValues);
+                        });
                     }
                 }
             };
@@ -328,12 +306,10 @@
                     const $ = window.jQuery;
                     
                     if (categoriesSelectRef.current && $(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(categoriesSelectRef.current).off('change.select2-custom');
                         $(categoriesSelectRef.current).select2('destroy');
                     }
                     
                     if (tagsSelectRef.current && $(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(tagsSelectRef.current).off('change.select2-custom');
                         $(tagsSelectRef.current).select2('destroy');
                     }
                 }
@@ -348,72 +324,6 @@
                 
                 return function() {
                     clearTimeout(timer);
-                };
-            }, [availableCategories, availableTags]);
-            
-            // Add MutationObserver to detect panel state changes
-            useEffect(function() {
-                const observer = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        // Check if any nodes were added or removed (panel expand/collapse)
-                        if (mutation.type === 'childList' && (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)) {
-                            // Small delay to ensure DOM is ready after panel state change
-                            setTimeout(function() {
-                                initializeSelect2();
-                            }, 150);
-                        }
-                        
-                        // Check for attribute changes (like class changes for panel state)
-                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                            setTimeout(function() {
-                                initializeSelect2();
-                            }, 150);
-                        }
-                    });
-                });
-                
-                // Start observing the inspector controls area
-                const inspectorElement = document.querySelector('.block-editor-block-inspector');
-                if (inspectorElement) {
-                    observer.observe(inspectorElement, {
-                        childList: true,
-                        subtree: true,
-                        attributes: true,
-                        attributeFilter: ['class']
-                    });
-                }
-                
-                return function() {
-                    observer.disconnect();
-                };
-            }, []);
-            
-            // Additional effect to reinitialize Select2 when panels become visible
-            useEffect(function() {
-                const checkAndInitialize = function() {
-                    // Check if select elements are visible and not already initialized
-                    if (categoriesSelectRef.current && categoriesSelectRef.current.offsetParent !== null) {
-                        if (!window.jQuery(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
-                            setTimeout(function() {
-                                initializeSelect2();
-                            }, 100);
-                        }
-                    }
-                    
-                    if (tagsSelectRef.current && tagsSelectRef.current.offsetParent !== null) {
-                        if (!window.jQuery(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
-                            setTimeout(function() {
-                                initializeSelect2();
-                            }, 100);
-                        }
-                    }
-                };
-                
-                // Check periodically for visibility changes
-                const interval = setInterval(checkAndInitialize, 500);
-                
-                return function() {
-                    clearInterval(interval);
                 };
             }, [availableCategories, availableTags]);
             

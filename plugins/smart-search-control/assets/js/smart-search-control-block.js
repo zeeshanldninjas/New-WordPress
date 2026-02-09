@@ -540,6 +540,7 @@
 
                     // Categories Panel
                     el( PanelBody, { 
+                        key: 'categories-panel',
                         title: 'Categories', 
                         initialOpen: false 
                     },
@@ -600,6 +601,7 @@
 
                     // Tags Panel
                     el( PanelBody, { 
+                        key: 'tags-panel',
                         title: 'Tags', 
                         initialOpen: false 
                     },

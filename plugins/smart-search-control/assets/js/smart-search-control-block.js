@@ -1,9 +1,10 @@
-( function ( blocks, blockEditor, element, components, data ) {
+( function ( blocks, blockEditor, element, components ) {
 
     const el = element.createElement;
     const { InspectorControls } = blockEditor;
     const { PanelBody, TextControl, CheckboxControl, SelectControl, Spinner } = components;
     const { useState, useEffect } = element;
+    const { apiFetch } = wp.apiFetch ? wp : { apiFetch: null };
 
     blocks.registerBlockType( 'smart-search-control/search-block', {
         title: 'Smart Search Control',
@@ -42,6 +43,11 @@
             const { attributes, setAttributes } = props;
             const { placeholder, cssId, cssClass, postTypes, categories, tags } = attributes;
             
+            // Ensure backward compatibility with existing blocks
+            const safeCategories = categories || {};
+            const safeTags = tags || {};
+            const safePostTypes = postTypes || [];
+            
             // Get dynamic post types from PHP (via wp_localize_script)
             const availablePostTypes = window.smarsecoBlockData && window.smarsecoBlockData.availablePostTypes 
                 ? window.smarsecoBlockData.availablePostTypes 
@@ -58,7 +64,7 @@
 
             // Handle post type checkbox change
             const handlePostTypeChange = function(value, checked) {
-                const newPostTypes = postTypes.slice();
+                const newPostTypes = safePostTypes.slice();
                 if (checked) {
                     if (newPostTypes.indexOf(value) === -1) {
                         newPostTypes.push(value);
@@ -85,21 +91,27 @@
                 }
             };
 
-            const allSelected = availablePostTypes.length > 0 && postTypes.length === availablePostTypes.length;
+            const allSelected = availablePostTypes.length > 0 && safePostTypes.length === availablePostTypes.length;
 
             // Load taxonomies when post types change
             useEffect(function() {
-                if (postTypes.length === 0) {
+                if (safePostTypes.length === 0) {
                     setAvailableCategories({});
                     setAvailableTags({});
+                    return;
+                }
+
+                // Check if apiFetch is available
+                if (!apiFetch) {
+                    console.warn('wp.apiFetch not available, skipping taxonomy loading');
                     return;
                 }
 
                 setTaxonomiesLoading(true);
                 
                 // Load taxonomies for each selected post type
-                const loadPromises = postTypes.map(function(postType) {
-                    return data.apiFetch({
+                const loadPromises = safePostTypes.map(function(postType) {
+                    return apiFetch({
                         path: '/smart-search-control/v1/taxonomies/' + postType
                     });
                 });
@@ -138,11 +150,11 @@
                     .finally(function() {
                         setTaxonomiesLoading(false);
                     });
-            }, [postTypes]);
+            }, [safePostTypes]);
 
             // Handle category selection
             const handleCategoryChange = function(taxonomy, termIds) {
-                const newCategories = Object.assign({}, categories);
+                const newCategories = Object.assign({}, safeCategories);
                 if (termIds.length > 0) {
                     newCategories[taxonomy] = termIds;
                 } else {
@@ -153,7 +165,7 @@
 
             // Handle tag selection
             const handleTagChange = function(taxonomy, termIds) {
-                const newTags = Object.assign({}, tags);
+                const newTags = Object.assign({}, safeTags);
                 if (termIds.length > 0) {
                     newTags[taxonomy] = termIds;
                 } else {
@@ -183,7 +195,7 @@
                         el( CheckboxControl, {
                             key: postType.value,
                             label: postType.label,
-                            checked: postTypes.indexOf(postType.value) !== -1,
+                            checked: safePostTypes.indexOf(postType.value) !== -1,
                             onChange: function(checked) {
                                 handlePostTypeChange(postType.value, checked);
                             }
@@ -281,7 +293,7 @@
                         title: 'Categories', 
                         initialOpen: false 
                     },
-                        postTypes.length === 0 ? 
+                        safePostTypes.length === 0 ? 
                             el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                 'Select post types first to enable category filtering.'
                             ) :
@@ -295,7 +307,7 @@
                                     ) :
                                     Object.keys(availableCategories).map(function(taxonomy) {
                                         const taxonomyTerms = availableCategories[taxonomy];
-                                        const selectedTerms = categories[taxonomy] || [];
+                                        const selectedTerms = safeCategories[taxonomy] || [];
                                         
                                         const options = [{ value: '', label: 'Select categories...' }].concat(
                                             taxonomyTerms.map(function(term) {
@@ -323,7 +335,7 @@
                         title: 'Tags', 
                         initialOpen: false 
                     },
-                        postTypes.length === 0 ? 
+                        safePostTypes.length === 0 ? 
                             el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                 'Select post types first to enable tag filtering.'
                             ) :
@@ -337,7 +349,7 @@
                                     ) :
                                     Object.keys(availableTags).map(function(taxonomy) {
                                         const taxonomyTerms = availableTags[taxonomy];
-                                        const selectedTerms = tags[taxonomy] || [];
+                                        const selectedTerms = safeTags[taxonomy] || [];
                                         
                                         const options = [{ value: '', label: 'Select tags...' }].concat(
                                             taxonomyTerms.map(function(term) {
@@ -376,6 +388,5 @@
     window.wp.blocks,
     window.wp.blockEditor,
     window.wp.element,
-    window.wp.components,
-    window.wp.data
+    window.wp.components
 );

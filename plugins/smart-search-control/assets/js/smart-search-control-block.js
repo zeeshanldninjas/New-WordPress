@@ -93,6 +93,114 @@
 
             const allSelected = availablePostTypes.length > 0 && safePostTypes.length === availablePostTypes.length;
 
+            // Helper function to create options with optgroups for categories
+            const getCategoriesOptions = function() {
+                const options = [];
+                Object.keys(availableCategories).forEach(function(taxonomy) {
+                    const taxonomyTerms = availableCategories[taxonomy];
+                    const taxonomyLabel = taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' ');
+                    
+                    // Add taxonomy header (disabled option)
+                    options.push({
+                        value: '',
+                        label: '--- ' + taxonomyLabel + ' ---',
+                        disabled: true
+                    });
+                    
+                    // Add terms for this taxonomy
+                    taxonomyTerms.forEach(function(term) {
+                        options.push({
+                            value: taxonomy + ':' + term.id,
+                            label: '  ' + term.name
+                        });
+                    });
+                });
+                return options;
+            };
+
+            // Helper function to create options with optgroups for tags
+            const getTagsOptions = function() {
+                const options = [];
+                Object.keys(availableTags).forEach(function(taxonomy) {
+                    const taxonomyTerms = availableTags[taxonomy];
+                    const taxonomyLabel = taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' ');
+                    
+                    // Add taxonomy header (disabled option)
+                    options.push({
+                        value: '',
+                        label: '--- ' + taxonomyLabel + ' ---',
+                        disabled: true
+                    });
+                    
+                    // Add terms for this taxonomy
+                    taxonomyTerms.forEach(function(term) {
+                        options.push({
+                            value: taxonomy + ':' + term.id,
+                            label: '  ' + term.name
+                        });
+                    });
+                });
+                return options;
+            };
+
+            // Helper function to get selected values for categories
+            const getCategoriesSelectedValues = function() {
+                const selectedValues = [];
+                Object.keys(safeCategories).forEach(function(taxonomy) {
+                    const termIds = safeCategories[taxonomy] || [];
+                    termIds.forEach(function(termId) {
+                        selectedValues.push(taxonomy + ':' + termId);
+                    });
+                });
+                return selectedValues;
+            };
+
+            // Helper function to get selected values for tags
+            const getTagsSelectedValues = function() {
+                const selectedValues = [];
+                Object.keys(safeTags).forEach(function(taxonomy) {
+                    const termIds = safeTags[taxonomy] || [];
+                    termIds.forEach(function(termId) {
+                        selectedValues.push(taxonomy + ':' + termId);
+                    });
+                });
+                return selectedValues;
+            };
+
+            // Handle categories change
+            const handleCategoriesChange = function(newValues) {
+                const newCategories = {};
+                newValues.forEach(function(value) {
+                    const parts = value.split(':');
+                    if (parts.length === 2) {
+                        const taxonomy = parts[0];
+                        const termId = parseInt(parts[1]);
+                        if (!newCategories[taxonomy]) {
+                            newCategories[taxonomy] = [];
+                        }
+                        newCategories[taxonomy].push(termId);
+                    }
+                });
+                setAttributes({ categories: newCategories });
+            };
+
+            // Handle tags change
+            const handleTagsChange = function(newValues) {
+                const newTags = {};
+                newValues.forEach(function(value) {
+                    const parts = value.split(':');
+                    if (parts.length === 2) {
+                        const taxonomy = parts[0];
+                        const termId = parseInt(parts[1]);
+                        if (!newTags[taxonomy]) {
+                            newTags[taxonomy] = [];
+                        }
+                        newTags[taxonomy].push(termId);
+                    }
+                });
+                setAttributes({ tags: newTags });
+            };
+
             // Load taxonomies when post types change
             useEffect(function() {
                 if (safePostTypes.length === 0) {
@@ -151,28 +259,6 @@
                         setTaxonomiesLoading(false);
                     });
             }, [safePostTypes]);
-
-            // Handle category selection
-            const handleCategoryChange = function(taxonomy, termIds) {
-                const newCategories = Object.assign({}, safeCategories);
-                if (termIds.length > 0) {
-                    newCategories[taxonomy] = termIds;
-                } else {
-                    delete newCategories[taxonomy];
-                }
-                setAttributes({ categories: newCategories });
-            };
-
-            // Handle tag selection
-            const handleTagChange = function(taxonomy, termIds) {
-                const newTags = Object.assign({}, safeTags);
-                if (termIds.length > 0) {
-                    newTags[taxonomy] = termIds;
-                } else {
-                    delete newTags[taxonomy];
-                }
-                setAttributes({ tags: newTags });
-            };
 
             // Create post type controls
             const postTypeElements = [];
@@ -305,28 +391,13 @@
                                     el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                         'No categories available for selected post types.'
                                     ) :
-                                    Object.keys(availableCategories).map(function(taxonomy) {
-                                        const taxonomyTerms = availableCategories[taxonomy];
-                                        const selectedTerms = safeCategories[taxonomy] || [];
-                                        
-                                        const options = [{ value: '', label: 'Select categories...' }].concat(
-                                            taxonomyTerms.map(function(term) {
-                                                return { value: term.id.toString(), label: term.name };
-                                            })
-                                        );
-                                        
-                                        return el( SelectControl, {
-                                            key: taxonomy,
-                                            label: taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' '),
-                                            multiple: true,
-                                            value: selectedTerms.map(function(id) { return id.toString(); }),
-                                            options: options,
-                                            onChange: function(newValues) {
-                                                const termIds = newValues.filter(function(val) { return val !== ''; }).map(function(val) { return parseInt(val); });
-                                                handleCategoryChange(taxonomy, termIds);
-                                            },
-                                            help: 'Select categories to filter search results within this taxonomy.'
-                                        });
+                                    el( SelectControl, {
+                                        label: 'Categories',
+                                        multiple: true,
+                                        value: getCategoriesSelectedValues(),
+                                        options: getCategoriesOptions(),
+                                        onChange: handleCategoriesChange,
+                                        help: 'Select categories to filter search results. Available after selecting post types.'
                                     })
                     ),
 
@@ -347,28 +418,13 @@
                                     el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                         'No tags available for selected post types.'
                                     ) :
-                                    Object.keys(availableTags).map(function(taxonomy) {
-                                        const taxonomyTerms = availableTags[taxonomy];
-                                        const selectedTerms = safeTags[taxonomy] || [];
-                                        
-                                        const options = [{ value: '', label: 'Select tags...' }].concat(
-                                            taxonomyTerms.map(function(term) {
-                                                return { value: term.id.toString(), label: term.name };
-                                            })
-                                        );
-                                        
-                                        return el( SelectControl, {
-                                            key: taxonomy,
-                                            label: taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' '),
-                                            multiple: true,
-                                            value: selectedTerms.map(function(id) { return id.toString(); }),
-                                            options: options,
-                                            onChange: function(newValues) {
-                                                const termIds = newValues.filter(function(val) { return val !== ''; }).map(function(val) { return parseInt(val); });
-                                                handleTagChange(taxonomy, termIds);
-                                            },
-                                            help: 'Select tags to filter search results within this taxonomy.'
-                                        });
+                                    el( SelectControl, {
+                                        label: 'Tags',
+                                        multiple: true,
+                                        value: getTagsSelectedValues(),
+                                        options: getTagsOptions(),
+                                        onChange: handleTagsChange,
+                                        help: 'Select tags to filter search results. Available after selecting post types.'
                                     })
                     )
                 ),

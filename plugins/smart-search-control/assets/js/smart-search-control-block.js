@@ -538,127 +538,119 @@
                             postTypeElements
                     ),
 
-                    // Categories Panel
-                    el( PanelBody, { 
+                    // Categories Panel - Always render to prevent duplication
+                    safePostTypes.length > 0 ? el( PanelBody, { 
                         key: 'categories-panel',
                         title: 'Categories', 
                         initialOpen: false 
                     },
-                        safePostTypes.length === 0 ? 
-                            el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                'Select post types first to enable category filtering.'
+                        taxonomiesLoading ?
+                            el( 'div', { style: { textAlign: 'center', padding: '20px' } },
+                                el( Spinner )
                             ) :
-                            taxonomiesLoading ?
-                                el( 'div', { style: { textAlign: 'center', padding: '20px' } },
-                                    el( Spinner )
+                            Object.keys(availableCategories).length === 0 ?
+                                el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
+                                    'No categories available for selected post types.'
                                 ) :
-                                Object.keys(availableCategories).length === 0 ?
-                                    el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                        'No categories available for selected post types.'
-                                    ) :
-                                    el( 'div', {},
-                                        el( 'label', { 
-                                            style: { 
-                                                display: 'block', 
-                                                marginBottom: '8px', 
-                                                fontSize: '11px', 
-                                                fontWeight: '500', 
-                                                lineHeight: '1.4', 
-                                                textTransform: 'uppercase', 
-                                                color: '#1e1e1e' 
-                                            } 
-                                        }, 'Categories'),
-                                        el( 'select', {
-                                            ref: categoriesSelectRef,
-                                            multiple: true,
-                                            style: { width: '100%', minHeight: '36px' },
-                                            value: getCategoriesSelectedValues()
-                                        }, getCategoriesOptions().map(function(option) {
-                                            if (option.label && option.label.startsWith('--- ')) {
-                                                // This is a taxonomy header
-                                                return el( 'optgroup', {
-                                                    key: option.value,
-                                                    label: option.label.replace('--- ', '').replace(' ---', '')
-                                                });
-                                            } else {
-                                                // This is a regular option
-                                                return el( 'option', {
-                                                    key: option.value,
-                                                    value: option.value
-                                                }, option.label);
-                                            }
-                                        })),
-                                        el( 'p', { 
-                                            style: { 
-                                                fontSize: '12px', 
-                                                fontStyle: 'normal', 
-                                                color: '#757575', 
-                                                margin: '8px 0 0' 
-                                            } 
-                                        }, 'Select categories to filter search results. Available after selecting post types.')
-                                    )
-                    ),
+                                el( 'div', {},
+                                    el( 'label', { 
+                                        style: { 
+                                            display: 'block', 
+                                            marginBottom: '8px', 
+                                            fontSize: '11px', 
+                                            fontWeight: '500', 
+                                            lineHeight: '1.4', 
+                                            textTransform: 'uppercase', 
+                                            color: '#1e1e1e' 
+                                        } 
+                                    }, 'Categories'),
+                                    el( 'select', {
+                                        ref: categoriesSelectRef,
+                                        multiple: true,
+                                        style: { width: '100%', minHeight: '36px' },
+                                        value: getCategoriesSelectedValues()
+                                    }, getCategoriesOptions().map(function(option) {
+                                        if (option.label && option.label.startsWith('--- ')) {
+                                            // This is a taxonomy header
+                                            return el( 'optgroup', {
+                                                key: option.value,
+                                                label: option.label.replace('--- ', '').replace(' ---', '')
+                                            });
+                                        } else {
+                                            // This is a regular option
+                                            return el( 'option', {
+                                                key: option.value,
+                                                value: option.value
+                                            }, option.label);
+                                        }
+                                    })),
+                                    el( 'p', { 
+                                        style: { 
+                                            fontSize: '12px', 
+                                            fontStyle: 'normal', 
+                                            color: '#757575', 
+                                            margin: '8px 0 0' 
+                                        } 
+                                    }, 'Select categories to filter search results. Available after selecting post types.')
+                                )
+                    ) : null,
 
-                    // Tags Panel
-                    el( PanelBody, { 
+                    // Tags Panel - Always render to prevent duplication
+                    safePostTypes.length > 0 ? el( PanelBody, { 
                         key: 'tags-panel',
                         title: 'Tags', 
                         initialOpen: false 
                     },
-                        safePostTypes.length === 0 ? 
-                            el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                'Select post types first to enable tag filtering.'
+                        taxonomiesLoading ?
+                            el( 'div', { style: { textAlign: 'center', padding: '20px' } },
+                                el( Spinner )
                             ) :
-                            taxonomiesLoading ?
-                                el( 'div', { style: { textAlign: 'center', padding: '20px' } },
-                                    el( Spinner )
+                            Object.keys(availableTags).length === 0 ?
+                                el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
+                                    'No tags available for selected post types.'
                                 ) :
-                                Object.keys(availableTags).length === 0 ?
-                                    el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                        'No tags available for selected post types.'
-                                    ) :
-                                    el( 'div', {},
-                                        el( 'label', { 
-                                            style: { 
-                                                display: 'block', 
-                                                marginBottom: '8px', 
-                                                fontSize: '11px', 
-                                                fontWeight: '500', 
-                                                lineHeight: '1.4', 
-                                                textTransform: 'uppercase', 
-                                                color: '#1e1e1e' 
-                                            } 
-                                        }, 'Tags'),
-                                        el( 'select', {
-                                            ref: tagsSelectRef,
-                                            multiple: true,
-                                            style: { width: '100%', minHeight: '36px' },
-                                            value: getTagsSelectedValues()
-                                        }, getTagsOptions().map(function(option) {
-                                            if (option.label && option.label.startsWith('--- ')) {
-                                                // This is a taxonomy header
-                                                return el( 'optgroup', {
-                                                    key: option.value,
-                                                    label: option.label.replace('--- ', '').replace(' ---', '')
-                                                });
-                                            } else {
-                                                // This is a regular option
-                                                return el( 'option', {
-                                                    key: option.value,
-                                                    value: option.value
-                                                }, option.label);
-                                            }
-                                        })),
-                                        el( 'p', { 
-                                            style: { 
-                                                fontSize: '12px', 
-                                                fontStyle: 'normal', 
-                                                color: '#757575', 
-                                                margin: '8px 0 0' 
-                                            } 
-                                        }, 'Select tags to filter search results. Available after selecting post types.')
-                                    )
-                    )
+                                el( 'div', {},
+                                    el( 'label', { 
+                                        style: { 
+                                            display: 'block', 
+                                            marginBottom: '8px', 
+                                            fontSize: '11px', 
+                                            fontWeight: '500', 
+                                            lineHeight: '1.4', 
+                                            textTransform: 'uppercase', 
+                                            color: '#1e1e1e' 
+                                        } 
+                                    }, 'Tags'),
+                                    el( 'select', {
+                                        ref: tagsSelectRef,
+                                        multiple: true,
+                                        style: { width: '100%', minHeight: '36px' },
+                                        value: getTagsSelectedValues()
+                                    }, getTagsOptions().map(function(option) {
+                                        if (option.label && option.label.startsWith('--- ')) {
+                                            // This is a taxonomy header
+                                            return el( 'optgroup', {
+                                                key: option.value,
+                                                label: option.label.replace('--- ', '').replace(' ---', '')
+                                            });
+                                        } else {
+                                            // This is a regular option
+                                            return el( 'option', {
+                                                key: option.value,
+                                                value: option.value
+                                            }, option.label);
+                                        }
+                                    })),
+                                    el( 'p', { 
+                                        style: { 
+                                            fontSize: '12px', 
+                                            fontStyle: 'normal', 
+                                            color: '#757575', 
+                                            margin: '8px 0 0' 
+                                        } 
+                                    }, 'Select tags to filter search results. Available after selecting post types.')
+                                )
+                    ) : null
                 ),
 
                 // Block Preview

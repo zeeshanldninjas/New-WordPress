@@ -12,7 +12,84 @@
                 this.cacheSelectors();
                 this.bindEvents();
                 this.adminNotice();
-                this.initSelect2();
+                this.handlePostTypeChange();
+                this.integrateSelect2();
+            },
+
+            /**
+             * Integrate select2 for categories and tags dropdown
+             */
+            integrateSelect2: function () {
+                
+                $( this.categoriesSelect ).select2({
+                    placeholder: "Select categories",
+                    allowClear: true,
+                });
+
+                $( this.tagsSelect ).select2( {
+                    placeholder: "Select tags",
+                    allowClear: true,
+                });
+            },
+
+            /**
+             * Handle post type checkbox change
+             * Update categories & tags via AJAX
+             */
+            handlePostTypeChange: function () {
+                
+                let categoriesDropdownSelector = this.categoriesSelect;
+                let tagsDropdownSelector = this.tagsSelect;
+
+                $(document).on('change', '.custom-checkbox', function () {
+                    
+                    let self = $(this);
+                    let form = self.closest('form#searchForm');
+                    let postType = self.val();
+                    let checked  = self.is(':checked');
+
+                    let categoriesDropdown = form.find( categoriesDropdownSelector );
+                    let tagsDropdown       = form.find( tagsDropdownSelector );
+
+                    $.ajax({
+                        url: SMARSECO_SETTING.ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'smarseco_get_taxonomies_by_post_type',
+                            nonce: SMARSECO_SETTING.nonce_tax_query,
+                            post_type: postType
+                        },
+                        success: function(response) {
+
+                            if (!response.success) return;
+
+                            // ----- Categories -----
+                            if (response.data.categories_html) {
+                                if (checked) {
+                                    categoriesDropdown.append(response.data.categories_html).change();
+                                } else {
+                                    categoriesDropdown.find('optgroup[data-post-type="' + postType + '"]').remove();
+                                }
+                                categoriesDropdown.prop('disabled', false);
+                            }
+
+                            // ----- Tags -----
+                            if (response.data.tags_html) {
+                                if (checked) {
+                                    tagsDropdown.append(response.data.tags_html).change();
+                                } else {
+                                    tagsDropdown.find('optgroup[data-post-type="' + postType + '"]').remove();
+                                }
+                                tagsDropdown.prop('disabled', false);
+                            }
+
+                        },
+                        error: function() {
+                            console.log('Error loading categories/tags for', postType);
+                        }
+                    });
+
+                });
             },
 
             /**
@@ -36,10 +113,10 @@
                 this.modelClass       = $( "#class" );
                 this.modelID          = $( "#id" );
                 this.modelPostType    = $( "input[name='post_type[]']" );
-                this.categoriesSelect = $( "#categories" );
-                this.tagsSelect       = $( "#tags" );
                 this.modelBtn         = $( ".model-btn" );
                 this.modalForm        = $( "#searchForm" );
+                this.categoriesSelect = $( "#smarseco-categories" );
+                this.tagsSelect       = $( "#smarseco-tags" );
             },
 
             /**
@@ -56,7 +133,6 @@
                 this.codeCopy.on( "click", this.copyShortCode.bind( this) );
                 this.selectAll.on( "change", this.selectAllPost.bind( this) );
                 this.singleOptions.on( "change", this.allsingleoptions.bind( this) );
-                this.modelPostType.on( "change", this.loadCategoriesTags.bind( this ) );
             },
 
             /**
@@ -65,12 +141,19 @@
             addNewSetting: function () {
 
                 this.modalForm.trigger( "reset" ).change();
-                
-                // Clear and disable categories/tags for new setting
-                this.categoriesSelect.empty().prop('disabled', true).trigger('change');
-                this.tagsSelect.empty().prop('disabled', true).trigger('change');
+                this.categoriesSelect.html('').change();
+                this.categoriesSelect.prop('disabled', true).change();
+                this.tagsSelect.html('').change();
+                this.tagsSelect.prop('disabled', true).change();
+
+                let categoriesDropdownSelector = this.categoriesSelect;
+                let tagsDropdownSelector       = this.tagsSelect;
+
                 this.modalForm.off( 'submit' ).on( 'submit', function ( e ) {
                     e.preventDefault();
+
+                    let categories = AdminSearchSetting.collectTermsByTaxonomy( categoriesDropdownSelector );
+                    let tags       = AdminSearchSetting.collectTermsByTaxonomy( tagsDropdownSelector );
 
                     let formData = {
                         action: 'smarseco_smart_search_control_setting',
@@ -81,8 +164,8 @@
                         post_type: $( 'input[name="post_type[]"]:checked' ).map( function () {
                             return $( this ).val();
                         } ).get(),
-                        categories: AdminSearchSetting.categoriesSelect.val() || [],
-                        tags: AdminSearchSetting.tagsSelect.val() || []
+                        categories: categories,
+                        tags: tags
                     };
 
                     let $submitBtn = $( '#submit-btn' );
@@ -131,6 +214,16 @@
                 let entry = JSON.parse( $( event.currentTarget ).attr( "data-entry" ) );
 
                 let parsedData = JSON.parse( entry.data );
+
+                let taxonomies = $(event.currentTarget).attr("data-taxonomies");
+                let decoded = atob(taxonomies);
+                let parsed  = JSON.parse(decoded);
+                let categoriesHTML = parsed.categories;
+                let tagsHTML       = parsed.tags;
+
+                // Convert stdClass to plain object
+                parsedData.categories = parsedData.categories ? Object.fromEntries(Object.entries(parsedData.categories)) : {};
+                parsedData.tags       = parsedData.tags ? Object.fromEntries(Object.entries(parsedData.tags)) : {};
                 
                 this.shortcodeid.text( entry.id );
                 this.modelPlaceHolder.val( parsedData.place_holder );
@@ -157,22 +250,37 @@
                     $( "#select-all" ).prop( "checked", false );
                 }
 
-                // Load categories and tags for selected post types, then populate saved values
-                this.loadCategoriesTags();
-                
-                // Set timeout to allow AJAX to complete before setting values
-                setTimeout(() => {
-                    if (parsedData.categories && Array.isArray(parsedData.categories)) {
-                        this.categoriesSelect.val(parsedData.categories).trigger('change');
-                    }
-                    if (parsedData.tags && Array.isArray(parsedData.tags)) {
-                        this.tagsSelect.val(parsedData.tags).trigger('change');
-                    }
-                }, 500);
+                if( categoriesHTML ) {
+                    this.categoriesSelect.prop('disabled', false);
+                    this.categoriesSelect.html( '' );
+                    this.categoriesSelect.html( categoriesHTML ).change();
+                }
+
+                if( tagsHTML ) {
+                    this.tagsSelect.prop('disabled', false);
+                    this.tagsSelect.html( '' );
+                    this.tagsSelect.html( tagsHTML ).change();
+                }
+
+                // Categories & Tags selection
+                if ( parsedData.categories ) {
+                    AdminSearchSetting.setSelectBySavedData( this.categoriesSelect, parsedData.categories);
+                }
+
+                if ( parsedData.tags ) {
+                    AdminSearchSetting.setSelectBySavedData(this.tagsSelect, parsedData.tags);
+                }
+
+                let categoriesDropdownSelector = this.categoriesSelect;
+                let tagsDropdownSelector       = this.tagsSelect;
                 
                 this.modalForm.off( "submit" ).on( "submit", function ( e ) {
 
                     e.preventDefault();
+
+                    let categories = AdminSearchSetting.collectTermsByTaxonomy( categoriesDropdownSelector );
+                    let tags       = AdminSearchSetting.collectTermsByTaxonomy( tagsDropdownSelector );
+
                     let formData = {
                         action: "smarseco_smart_search_control_setting_edit",
                         nonce: SMARSECO_SETTING.nonce_edit,
@@ -183,8 +291,8 @@
                         post_type: $( 'input[name="post_type[]"]:checked' ).map( function () {
                             return $( this ).val();
                         } ).get(),
-                        categories: AdminSearchSetting.categoriesSelect.val() || [],
-                        tags: AdminSearchSetting.tagsSelect.val() || []
+                        categories: categories,
+                        tags: tags
                     };
 
                     let $submitBtn = $( '#submit-btn' );
@@ -222,6 +330,55 @@
                 });
 
                 this.openModal();
+            },
+
+            /**
+             * Set select by save Data
+             */
+            setSelectBySavedData: function( selectSelector, savedData ) {
+
+                const $select = $( selectSelector );
+    
+                // Reset all options
+                $select.find('option').prop('selected', false);
+
+                for ( let taxonomy in savedData ) {
+                    if ( ! savedData.hasOwnProperty(taxonomy) ) continue;
+
+                    savedData[taxonomy].forEach( termId => {
+                        $select
+                            .find('optgroup[data-taxonomy="' + taxonomy + '"] option[value="' + termId.toString() + '"]')
+                            .prop('selected', true);
+                    });
+                }
+
+                // Trigger change for any plugin
+                $select.trigger('change');
+            },
+
+            /**
+             * Collect terms by texonomy
+             */
+            collectTermsByTaxonomy: function( selectSelector ) {
+
+                let result = {};
+
+                $( selectSelector ).find( 'option:selected' ).each( function () {
+                    let termId   = $( this ).val();
+                    let taxonomy = $( this ).closest( 'optgroup' ).data( 'taxonomy' );
+
+                    if ( ! taxonomy || ! termId ) {
+                        return;
+                    }
+
+                    if ( ! result[ taxonomy ] ) {
+                        result[ taxonomy ] = [];
+                    }
+
+                    result[ taxonomy ].push( parseInt( termId, 10 ) );
+                });
+
+                return result;
             },
 
             /**
@@ -353,8 +510,8 @@
              * When check Select all then select all option
              */
             selectAllPost: function() {
-                
-                $( ".custom-checkbox" ).prop( "checked", $( this.selectAll ).prop( "checked" ) );
+
+                $(".custom-checkbox").prop("checked", $(this.selectAll).is(":checked")).trigger("change");
             },
 
             /**
@@ -396,97 +553,6 @@
                         $( this ).closest( ".notice" ).fadeOut().change();
                     });
                 }
-            },
-
-            /**
-             * Initialize Select2 for categories and tags
-             */
-            initSelect2: function () {
-                this.categoriesSelect.select2({
-                    placeholder: 'Select categories...',
-                    allowClear: true,
-                    width: '100%'
-                });
-
-                this.tagsSelect.select2({
-                    placeholder: 'Select tags...',
-                    allowClear: true,
-                    width: '100%'
-                });
-            },
-
-            /**
-             * Load categories and tags based on selected post types
-             */
-            loadCategoriesTags: function () {
-                const selectedPostTypes = [];
-                this.modelPostType.filter(':checked').each(function() {
-                    selectedPostTypes.push($(this).val());
-                });
-
-                if (selectedPostTypes.length === 0) {
-                    // Disable and clear categories/tags if no post types selected
-                    this.categoriesSelect.prop('disabled', true).empty().trigger('change');
-                    this.tagsSelect.prop('disabled', true).empty().trigger('change');
-                    return;
-                }
-
-                // Show loading state
-                this.categoriesSelect.prop('disabled', true);
-                this.tagsSelect.prop('disabled', true);
-
-                $.ajax({
-                    url: SMARSECO_SETTING.ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'smarseco_get_categories_tags',
-                        nonce: SMARSECO_SETTING.nonce_categories_tags,
-                        post_types: selectedPostTypes
-                    },
-                    success: (response) => {
-                        if (response.success) {
-                            // Populate categories
-                            this.categoriesSelect.empty();
-                            if (response.data.categories && Object.keys(response.data.categories).length > 0) {
-                                $.each(response.data.categories, (key, category) => {
-                                    this.categoriesSelect.append(new Option(
-                                        `${category.name} (${category.taxonomy_label})`,
-                                        key,
-                                        false,
-                                        false
-                                    ));
-                                });
-                                this.categoriesSelect.prop('disabled', false);
-                            }
-
-                            // Populate tags
-                            this.tagsSelect.empty();
-                            if (response.data.tags && Object.keys(response.data.tags).length > 0) {
-                                $.each(response.data.tags, (key, tag) => {
-                                    this.tagsSelect.append(new Option(
-                                        `${tag.name} (${tag.taxonomy_label})`,
-                                        key,
-                                        false,
-                                        false
-                                    ));
-                                });
-                                this.tagsSelect.prop('disabled', false);
-                            }
-
-                            // Trigger change to update Select2
-                            this.categoriesSelect.trigger('change');
-                            this.tagsSelect.trigger('change');
-                        } else {
-                            console.error('Failed to load categories and tags:', response.data.message);
-                        }
-                    },
-                    error: (xhr, status, error) => {
-                        console.error('AJAX error:', error);
-                        // Re-enable selects even on error
-                        this.categoriesSelect.prop('disabled', false);
-                        this.tagsSelect.prop('disabled', false);
-                    }
-                });
             }
 
         };

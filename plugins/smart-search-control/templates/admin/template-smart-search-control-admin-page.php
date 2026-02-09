@@ -24,6 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <th><?php echo esc_html__( 'Place Holder' , 'smart-search-control' ); ?></th>
                 <th><?php echo esc_html__( 'CSS ID' , 'smart-search-control' ); ?></th>
                 <th><?php echo esc_html__( 'CSS Class' , 'smart-search-control' ); ?></th>
+                <th><?php echo esc_html__( 'Categories' , 'smart-search-control' ); ?></th>
+                <th><?php echo esc_html__( 'Tags' , 'smart-search-control' ); ?></th>
                 <?php do_action( 'smarseco_column_header_before_action_column' ); ?>
                 <th><?php echo esc_html__( 'Action' , 'smart-search-control' ); ?></th>
             </tr>
@@ -32,8 +34,60 @@ if ( ! defined( 'ABSPATH' ) ) {
         <?php if ( isset( $smarseco_search_entries ) && is_array( $smarseco_search_entries ) && $smarseco_search_entries ) { ?>
                 <?php foreach ( $smarseco_search_entries as $smarseco_entry ){
                 
-                    $smarseco_data = json_decode( $smarseco_entry->data ); ?>
-                    
+                    $smarseco_data = json_decode( $smarseco_entry->data );
+
+                    $categories_display = [];
+                    $tags_display       = [];
+
+                    // --- Categories display ---
+                    if ( isset($smarseco_data->categories) ) {
+                        foreach ( $smarseco_data->categories as $taxonomy => $term_ids ) {
+
+                            foreach ( $term_ids as $term_id ) {
+                                $term = get_term( $term_id, $taxonomy );
+                                if ( $term && ! is_wp_error( $term ) ) {
+                                    $categories_display[] = $term->name;
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Tags display ---
+                    if ( isset($smarseco_data->tags) ) {
+                        foreach ( $smarseco_data->tags as $taxonomy => $term_ids ) {
+
+                            foreach ( $term_ids as $term_id ) {
+                                $term = get_term( $term_id, $taxonomy );
+                                if ( $term && ! is_wp_error( $term ) ) {
+                                    $tags_display[] = $term->name;
+                                }
+                            }
+                        }
+                    }
+
+                    $show_tags = !empty($tags_display) ? esc_html( implode(', ', array_unique($tags_display)) ) : '-';
+                    $show_categories = !empty($categories_display) ? esc_html( implode(', ', array_unique($categories_display)) ) : '-';
+
+                    $categories_html = '';
+                    $tags_html       = '';
+
+                    if( isset( $smarseco_data->post_type ) && is_array($smarseco_data->post_type) ) {
+                        foreach( $smarseco_data->post_type as $selected_post_type ) {
+
+                            $terms           = SMARSECO_Smart_Search_Control_Admin_Menu::instance()->eff_get_categories_and_tags( $selected_post_type );
+                            $categories_html .= SMARSECO_Smart_Search_Control_Admin_Menu::instance()->eff_generate_taxonomy_options_html( $terms['categories'], $selected_post_type );
+                            $tags_html       .= SMARSECO_Smart_Search_Control_Admin_Menu::instance()->eff_generate_taxonomy_options_html( $terms['tags'], $selected_post_type );
+                        }
+                    }
+
+                    $data = [
+                        'categories' => $categories_html,
+                        'tags'       => $tags_html,
+                    ];
+
+                    $data_attr = base64_encode( wp_json_encode( $data ) );
+
+                    ?>
                     <tr class="search-table-data">
                         <strong>
                             <td>[smart_search_control id="<?php echo esc_html( $smarseco_entry->id ); ?>"]</td>
@@ -41,9 +95,20 @@ if ( ! defined( 'ABSPATH' ) ) {
                         <td><?php echo esc_html( $smarseco_data->place_holder ); ?></td>
                         <td><?php echo esc_html( $smarseco_data->css_id ); ?></td>
                         <td><?php echo esc_html( implode( ', ', explode( ' ', $smarseco_data->class ) ) ); ?></td>
+
+                        <!-- Display only selected categories & tags -->
+                        <td class="smarseco-categories-td" title="<?php echo esc_attr( $show_categories ); ?>">
+                            <?php echo $show_categories; ?>
+                        </td>
+
+                        <td class="smarseco-tags-td" title="<?php echo esc_attr( $show_tags ); ?>">
+                            <?php echo $show_tags; ?>
+                        </td>
+
                         <?php do_action( 'smarseco_column_content_before_action_column', $smarseco_data ); ?>
+
                         <td>
-                            <a href="#" data-entry='<?php echo esc_attr(htmlentities( wp_json_encode( $smarseco_entry ?: new stdClass() ), ENT_QUOTES, 'UTF-8' ) ); ?>' class="button edit-setting"><?php echo esc_html__( 'Edit', 'smart-search-control' ); ?></a>
+                            <a href="#" data-taxonomies="<?php echo esc_attr($data_attr); ?>" data-entry='<?php echo esc_attr(htmlentities( wp_json_encode( $smarseco_entry ?: new stdClass() ), ENT_QUOTES, 'UTF-8' ) ); ?>' class="button edit-setting"><?php echo esc_html__( 'Edit', 'smart-search-control' ); ?></a>
                             <button class="delete-setting " data-id="<?php echo esc_html(  $smarseco_entry->id ); ?>">
                                 <span  id="delete-row"><?php echo esc_html__( 'Delete' , 'smart-search-control'); ?>
                                 </span>
@@ -67,6 +132,8 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <th><?php echo esc_html__( 'Place Holder' , 'smart-search-control' ); ?></th>
                 <th><?php echo esc_html__( 'CSS ID' , 'smart-search-control' ); ?></th>
                 <th><?php echo esc_html__( 'CSS Class' , 'smart-search-control' ); ?></th>
+                <th><?php echo esc_html__( 'Categories' , 'smart-search-control' ); ?></th>
+                <th><?php echo esc_html__( 'Tags' , 'smart-search-control' ); ?></th>
                 <?php do_action( 'smarseco_column_footer_before_action_column' ); ?>
                 <th><?php echo esc_html__( 'Action' , 'smart-search-control' ); ?></th>
             </tr>
@@ -182,27 +249,38 @@ if ( ! defined( 'ABSPATH' ) ) {
                     }?>
                 </div>
 
+                <hr>
+
                 <!-- Categories Section -->
-                <div class="form-group">
+                <div class="form-group smarseco-categories-wrapper">
                     <div class="label-container">
-                        <label class="categories-label"><?php echo esc_html__( 'Categories' , 'smart-search-control' ); ?></label>
+                        <label for="smarseco-categories" class="categories-label">
+                            <?php echo esc_html__( 'Categories' , 'smart-search-control' ); ?>
+                        </label>
                     </div>
-                    <select name="categories[]" id="categories" class="categories-select" multiple="multiple" disabled>
+                    <select name="categories[]" id="smarseco-categories" class="categories-select smarseco-categories-select" multiple="multiple" disabled>
                         <!-- Options will be populated dynamically -->
                     </select>
-                    <span class="inputs-desc"><?php echo esc_html__( 'Select categories to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?></span>
+                    <div class="inputs-desc">
+                        <?php echo esc_html__( 'Select categories to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?>
+                    </div>
                 </div>
 
                 <!-- Tags Section -->
-                <div class="form-group">
+                <div class="form-group smarseco-tags-wrapper">
                     <div class="label-container">
-                        <label class="tags-label"><?php echo esc_html__( 'Tags' , 'smart-search-control' ); ?></label>
+                        <label for="smarseco-tags" class="tags-label">
+                            <?php echo esc_html__( 'Tags' , 'smart-search-control' ); ?>
+                        </label>
                     </div>
-                    <select name="tags[]" id="tags" class="tags-select" multiple="multiple" disabled>
+                    <select name="tags[]" id="smarseco-tags" class="tags-select smarseco-tags-select" multiple="multiple" disabled>
                         <!-- Options will be populated dynamically -->
                     </select>
-                    <span class="inputs-desc"><?php echo esc_html__( 'Select tags to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?></span>
+                    <div class="inputs-desc">
+                        <?php echo esc_html__( 'Select tags to filter search results. Available after selecting post types.' , 'smart-search-control' ); ?>
+                    </div>
                 </div>
+
 
                 <hr>
 

@@ -142,16 +142,6 @@
 
                 let ssc_id = parentContainer.find(  'input[ name="smartsearch" ]' ).val();
                 let block_post_types = parentContainer.find( 'input[ name="block_post_types" ]' ).val();
-                
-                // Get categories and tags from hidden inputs
-                let categories = [];
-                let tags = [];
-                parentContainer.find( 'input[ name="categories[]" ]' ).each( function() {
-                    categories.push( $( this ).val() );
-                });
-                parentContainer.find( 'input[ name="tags[]" ]' ).each( function() {
-                    tags.push( $( this ).val() );
-                });
 
                 if ( SearchForm.ajaxRequest ) {
 
@@ -168,8 +158,6 @@
                         search_query: searchQuery,
                         ssc_id: ssc_id,
                         block_post_types: block_post_types,
-                        categories: categories,
-                        tags: tags,
                     },
 
                     beforeSend: function () {

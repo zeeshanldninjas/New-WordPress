@@ -142,6 +142,8 @@
 
                 let ssc_id = parentContainer.find(  'input[ name="smartsearch" ]' ).val();
                 let block_post_types = parentContainer.find( 'input[ name="block_post_types" ]' ).val();
+                let block_categories = parentContainer.find( 'input[ name="block_categories" ]' ).val();
+                let block_tags = parentContainer.find( 'input[ name="block_tags" ]' ).val();
 
                 if ( SearchForm.ajaxRequest ) {
 
@@ -158,6 +160,8 @@
                         search_query: searchQuery,
                         ssc_id: ssc_id,
                         block_post_types: block_post_types,
+                        block_categories: block_categories,
+                        block_tags: block_tags,
                     },
 
                     beforeSend: function () {

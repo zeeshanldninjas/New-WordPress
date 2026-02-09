@@ -122,23 +122,6 @@ class SMARSECO_Gutenberg_Block {
             SMARSECO_VERSION,
             'all'
         );
-        
-        // Enqueue Select2 assets for block editor
-        wp_enqueue_style(
-            'smarseco-select2-css',
-            SMARSECO_ASSETS_URL . 'css/smarseco-select2.min.css',
-            [],
-            SMARSECO_VERSION,
-            'all'
-        );
-        
-        wp_enqueue_script(
-            'smarseco-select2-js',
-            SMARSECO_ASSETS_URL . 'js/smarseco-select2.min.js',
-            array( 'jquery' ),
-            SMARSECO_VERSION,
-            true
-        );
     }
 
     /**
@@ -149,7 +132,7 @@ class SMARSECO_Gutenberg_Block {
         wp_register_script(
             'smart-search-control-gutenberg-block',
             SMARSECO_URL . 'assets/js/smart-search-control-block.js',
-            array( 'wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-block-editor', 'jquery', 'smarseco-select2-js' ),
+            array( 'wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-block-editor' ),
             SMARSECO_VERSION
         );
         

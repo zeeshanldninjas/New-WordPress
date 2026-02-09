@@ -3,7 +3,7 @@
     const el = element.createElement;
     const { InspectorControls } = blockEditor;
     const { PanelBody, TextControl, CheckboxControl, SelectControl, Spinner } = components;
-    const { useState, useEffect, useRef } = element;
+    const { useState, useEffect } = element;
     const { apiFetch } = wp.apiFetch ? wp : { apiFetch: null };
 
     blocks.registerBlockType( 'smart-search-control/search-block', {
@@ -61,10 +61,6 @@
             const [availableCategories, setAvailableCategories] = useState({});
             const [availableTags, setAvailableTags] = useState({});
             const [taxonomiesLoading, setTaxonomiesLoading] = useState(false);
-            
-            // Refs for Select2 elements
-            const categoriesSelectRef = useRef(null);
-            const tagsSelectRef = useRef(null);
 
             // Handle post type checkbox change
             const handlePostTypeChange = function(value, checked) {
@@ -264,76 +260,6 @@
                     });
             }, [safePostTypes]);
 
-            // Select2 initialization and management
-            const initializeSelect2 = function() {
-                if (window.jQuery && window.jQuery.fn.select2) {
-                    const $ = window.jQuery;
-                    
-                    // Initialize Categories Select2
-                    if (categoriesSelectRef.current && !$(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(categoriesSelectRef.current).select2({
-                            placeholder: "Select categories",
-                            allowClear: true,
-                            width: '100%'
-                        });
-                        
-                        // Handle Select2 change events
-                        $(categoriesSelectRef.current).on('change', function() {
-                            const selectedValues = $(this).val() || [];
-                            handleCategoriesChange(selectedValues);
-                        });
-                    }
-                    
-                    // Initialize Tags Select2
-                    if (tagsSelectRef.current && !$(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(tagsSelectRef.current).select2({
-                            placeholder: "Select tags",
-                            allowClear: true,
-                            width: '100%'
-                        });
-                        
-                        // Handle Select2 change events
-                        $(tagsSelectRef.current).on('change', function() {
-                            const selectedValues = $(this).val() || [];
-                            handleTagsChange(selectedValues);
-                        });
-                    }
-                }
-            };
-            
-            const destroySelect2 = function() {
-                if (window.jQuery && window.jQuery.fn.select2) {
-                    const $ = window.jQuery;
-                    
-                    if (categoriesSelectRef.current && $(categoriesSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(categoriesSelectRef.current).select2('destroy');
-                    }
-                    
-                    if (tagsSelectRef.current && $(tagsSelectRef.current).hasClass('select2-hidden-accessible')) {
-                        $(tagsSelectRef.current).select2('destroy');
-                    }
-                }
-            };
-            
-            // Initialize Select2 when available options change
-            useEffect(function() {
-                // Small delay to ensure DOM is ready
-                const timer = setTimeout(function() {
-                    initializeSelect2();
-                }, 100);
-                
-                return function() {
-                    clearTimeout(timer);
-                };
-            }, [availableCategories, availableTags]);
-            
-            // Cleanup Select2 on unmount
-            useEffect(function() {
-                return function() {
-                    destroySelect2();
-                };
-            }, []);
-
             // Create post type controls
             const postTypeElements = [];
             
@@ -465,47 +391,14 @@
                                     el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                         'No categories available for selected post types.'
                                     ) :
-                                    el( 'div', {},
-                                        el( 'label', { 
-                                            style: { 
-                                                display: 'block', 
-                                                marginBottom: '8px', 
-                                                fontSize: '11px', 
-                                                fontWeight: '500', 
-                                                lineHeight: '1.4', 
-                                                textTransform: 'uppercase', 
-                                                color: '#1e1e1e' 
-                                            } 
-                                        }, 'Categories'),
-                                        el( 'select', {
-                                            ref: categoriesSelectRef,
-                                            multiple: true,
-                                            style: { width: '100%', minHeight: '36px' },
-                                            value: getCategoriesSelectedValues()
-                                        }, getCategoriesOptions().map(function(option) {
-                                            if (option.label && option.label.startsWith('--- ')) {
-                                                // This is a taxonomy header
-                                                return el( 'optgroup', {
-                                                    key: option.value,
-                                                    label: option.label.replace('--- ', '').replace(' ---', '')
-                                                });
-                                            } else {
-                                                // This is a regular option
-                                                return el( 'option', {
-                                                    key: option.value,
-                                                    value: option.value
-                                                }, option.label);
-                                            }
-                                        })),
-                                        el( 'p', { 
-                                            style: { 
-                                                fontSize: '12px', 
-                                                fontStyle: 'normal', 
-                                                color: '#757575', 
-                                                margin: '8px 0 0' 
-                                            } 
-                                        }, 'Select categories to filter search results. Available after selecting post types.')
-                                    )
+                                    el( SelectControl, {
+                                        label: 'Categories',
+                                        multiple: true,
+                                        value: getCategoriesSelectedValues(),
+                                        options: getCategoriesOptions(),
+                                        onChange: handleCategoriesChange,
+                                        help: 'Select categories to filter search results. Available after selecting post types.'
+                                    })
                     ),
 
                     // Tags Panel
@@ -525,47 +418,14 @@
                                     el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
                                         'No tags available for selected post types.'
                                     ) :
-                                    el( 'div', {},
-                                        el( 'label', { 
-                                            style: { 
-                                                display: 'block', 
-                                                marginBottom: '8px', 
-                                                fontSize: '11px', 
-                                                fontWeight: '500', 
-                                                lineHeight: '1.4', 
-                                                textTransform: 'uppercase', 
-                                                color: '#1e1e1e' 
-                                            } 
-                                        }, 'Tags'),
-                                        el( 'select', {
-                                            ref: tagsSelectRef,
-                                            multiple: true,
-                                            style: { width: '100%', minHeight: '36px' },
-                                            value: getTagsSelectedValues()
-                                        }, getTagsOptions().map(function(option) {
-                                            if (option.label && option.label.startsWith('--- ')) {
-                                                // This is a taxonomy header
-                                                return el( 'optgroup', {
-                                                    key: option.value,
-                                                    label: option.label.replace('--- ', '').replace(' ---', '')
-                                                });
-                                            } else {
-                                                // This is a regular option
-                                                return el( 'option', {
-                                                    key: option.value,
-                                                    value: option.value
-                                                }, option.label);
-                                            }
-                                        })),
-                                        el( 'p', { 
-                                            style: { 
-                                                fontSize: '12px', 
-                                                fontStyle: 'normal', 
-                                                color: '#757575', 
-                                                margin: '8px 0 0' 
-                                            } 
-                                        }, 'Select tags to filter search results. Available after selecting post types.')
-                                    )
+                                    el( SelectControl, {
+                                        label: 'Tags',
+                                        multiple: true,
+                                        value: getTagsSelectedValues(),
+                                        options: getTagsOptions(),
+                                        onChange: handleTagsChange,
+                                        help: 'Select tags to filter search results. Available after selecting post types.'
+                                    })
                     )
                 ),
 

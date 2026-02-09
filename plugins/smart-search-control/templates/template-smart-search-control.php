@@ -39,6 +39,38 @@ if ( !defined( 'ABSPATH' ) ) {
                 <?php
             }
 
+            /* Pass gutenberg selected categories */
+            $block_categories_value = '';
+            if ( isset( $block_categories ) && is_array( $block_categories ) && ! empty( $block_categories ) ) {
+                $block_categories_value = wp_json_encode( $block_categories );
+            } elseif ( isset( $_GET['block_categories'] ) && ! empty( $_GET['block_categories'] ) ) {
+                $block_categories_value = sanitize_text_field(
+                    wp_unslash( $_GET['block_categories'] )
+                );
+            }
+
+            if( !empty( $block_categories_value ) ){
+                ?>
+                <input type="hidden" name="block_categories" value="<?php echo esc_attr( $block_categories_value ); ?>">
+                <?php
+            }
+
+            /* Pass gutenberg selected tags */
+            $block_tags_value = '';
+            if ( isset( $block_tags ) && is_array( $block_tags ) && ! empty( $block_tags ) ) {
+                $block_tags_value = wp_json_encode( $block_tags );
+            } elseif ( isset( $_GET['block_tags'] ) && ! empty( $_GET['block_tags'] ) ) {
+                $block_tags_value = sanitize_text_field(
+                    wp_unslash( $_GET['block_tags'] )
+                );
+            }
+
+            if( !empty( $block_tags_value ) ){
+                ?>
+                <input type="hidden" name="block_tags" value="<?php echo esc_attr( $block_tags_value ); ?>">
+                <?php
+            }
+
             ?>
 
             <!-- Search Button -->

@@ -64,8 +64,12 @@ class SMARSECO_Smart_Search_Control_Result {
             echo '<h3>' . esc_html__( 'Table for Smart Search Control does not exist', 'smart-search-control' ) . '</h3>';
             return ob_get_clean();
         }
+
         $all_public_post_types = smarseco_get_visible_post_types();
         $posts_types = $all_public_post_types;
+
+        $categories = [];
+        $tags = [];
 
         if ( isset( $_GET['query'] ) && ! empty( $_GET['query'] ) && isset( $_GET['nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'ssc_search_nonce' ) ) {
 
@@ -99,6 +103,9 @@ class SMARSECO_Smart_Search_Control_Result {
                 if ( ! empty( $data_cached ) ) {
                     $data = json_decode( $data_cached );
 
+                    $categories = isset( $data->categories ) ? $data->categories : [];
+                    $tags = isset( $data->tags ) ? $data->tags : [];
+
                     if ( isset( $data->post_type ) ) {
                         if ( is_array( $data->post_type ) ) {
                             $posts_types = $data->post_type;
@@ -131,6 +138,40 @@ class SMARSECO_Smart_Search_Control_Result {
             }, $posts_types );
         }
 
+        $tax_query = [ 'relation' => 'OR' ];
+
+        /**
+         * Categories
+         */
+        if ( ! empty( $categories ) && is_object( $categories ) ) {
+            foreach ( $categories as $taxonomy => $term_ids ) {
+                if ( ! empty( $term_ids ) && is_array( $term_ids ) ) {
+                    $tax_query[] = [
+                        'taxonomy' => $taxonomy,
+                        'field'    => 'term_id',
+                        'terms'    => array_map( 'intval', $term_ids ),
+                        'operator' => 'IN',
+                    ];
+                }
+            }
+        }
+
+        /**
+         * Tags
+         */
+        if ( ! empty( $tags ) && is_object( $tags ) ) {
+            foreach ( $tags as $taxonomy => $term_ids ) {
+                if ( ! empty( $term_ids ) && is_array( $term_ids ) ) {
+                    $tax_query[] = [
+                        'taxonomy' => $taxonomy,
+                        'field'    => 'term_id',
+                        'terms'    => array_map( 'intval', $term_ids ),
+                        'operator' => 'IN',
+                    ];
+                }
+            }
+        }
+
         $args = [
             's' => $search_query,
             'post_type' => $posts_types,
@@ -138,6 +179,10 @@ class SMARSECO_Smart_Search_Control_Result {
             'post_status'    => 'publish',
             'paged' => get_query_var( 'paged', 1 ),
         ];
+
+        if ( count( $tax_query ) > 1 ) {
+            $args['tax_query'] = $tax_query;
+        }
         
         $query = new WP_Query( $args );
 

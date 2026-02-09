@@ -42,7 +42,117 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
         add_action( 'wp_ajax_smarseco_smart_search_control_setting_delete', [ $this, 'smarseco_smart_search_control_setting_delete' ] );
         add_action( 'wp_ajax_smarseco_smart_search_control_setting_edit', [ $this, 'smarseco_smart_search_control_setting_edit' ] );
         add_action( 'wp_ajax_smarseco_create_database_table', [ $this, 'smarseco_create_database_table' ] );
-        add_action( 'admin_notices', [ $this, 'smarseco_display_admin_notice' ] ); 
+        add_action( 'admin_notices', [ $this, 'smarseco_display_admin_notice' ] );
+
+        add_action( 'wp_ajax_smarseco_get_taxonomies_by_post_type', [ $this, 'smarseco_get_taxonomies_by_post_type' ] );
+        add_action( 'wp_ajax_nopriv_smarseco_get_taxonomies_by_post_type', [ $this, 'smarseco_get_taxonomies_by_post_type' ] );
+    }
+
+    /**
+     * Get taxonomies by post type via AJAX
+     *
+     * @return void Outputs JSON response with taxonomies for the given post type
+     */
+    public function smarseco_get_taxonomies_by_post_type() {
+
+        // Security check
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'get_taxonomies_by_post_type_nonce' ) ) {
+            wp_send_json_error( [ 'message' => 'Invalid nonce' ] );
+        }
+
+        $post_type = isset( $_POST['post_type'] ) ? $_POST['post_type'] : '';
+
+        if ( empty( $post_type ) ) {
+            wp_send_json_error( [ 'message' => 'No post type provided' ] );
+        }
+
+        $terms = $this->eff_get_categories_and_tags( $post_type );
+        $categories_html = $this->eff_generate_taxonomy_options_html( $terms['categories'], $post_type );
+        $tags_html       = $this->eff_generate_taxonomy_options_html( $terms['tags'], $post_type );
+
+        wp_send_json_success( [
+            'categories_html' => $categories_html,
+            'tags_html'       => $tags_html,
+        ] );
+    }
+
+    /**
+     * Get categories and tags terms for a given post type.
+     *
+     * @param string $post_type Post type slug.
+     * @return array
+     */
+    public function eff_get_categories_and_tags( $post_type ) {
+        $categories = [];
+        $tags       = [];
+
+        $taxonomies = get_object_taxonomies( $post_type, 'objects' );
+
+        foreach ( $taxonomies as $taxonomy ) {
+            // Skip non-public or hidden taxonomies
+            if ( ! $taxonomy->public || ! $taxonomy->show_ui ) {
+                continue;
+            }
+
+            $terms = get_terms( [
+                'taxonomy'   => $taxonomy->name,
+                'hide_empty' => false,
+            ] );
+
+            if ( is_wp_error( $terms ) || empty( $terms ) ) {
+                continue;
+            }
+
+            foreach ( $terms as $term ) {
+                if ( $taxonomy->hierarchical ) {
+                    $categories[ $taxonomy->name ][ $term->term_id ] = $term;
+                } else {
+                    $tags[ $taxonomy->name ][ $term->term_id ] = $term;
+                }
+            }
+        }
+
+        return [
+            'categories' => $categories,
+            'tags'       => $tags,
+        ];
+    }
+
+    /**
+     * Generate HTML for taxonomy <optgroup> and <option> elements.
+     *
+     * @param array  $taxonomies  Array of taxonomies with terms.
+     * @param string $post_type   Post type to include in data attribute.
+     * @return string HTML output
+     */
+    public function eff_generate_taxonomy_options_html( $taxonomies, $post_type ) {
+        if ( empty( $taxonomies ) ) {
+            return '';
+        }
+
+        ob_start();
+
+        foreach ( $taxonomies as $taxonomy => $terms ) {
+            $tax_obj = get_taxonomy( $taxonomy );
+            if ( ! $tax_obj || empty( $terms ) ) {
+                continue;
+            }
+            ?>
+            <optgroup 
+                label="<?php echo esc_attr( $tax_obj->label ); ?>"
+                data-taxonomy="<?php echo esc_attr( $taxonomy ); ?>"
+                data-post-type="<?php echo esc_attr( $post_type ); ?>"
+            >
+                <?php foreach ( $terms as $term ) { ?>
+                    <option value="<?php echo esc_attr( $term->term_id ); ?>">
+                        <?php echo esc_html( $term->name ); ?>
+                    </option>
+                <?php } ?>
+            </optgroup>
+            <?php
+        }
+
+        return ob_get_clean();
     }
 
     /**
@@ -169,6 +279,7 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             }
             $post_types = apply_filters( 'smarseco_visible_post_types', $visible_post_types );
         }
+
         $template_path = SMARSECO_TEMPLATES_DIR . 'admin/template-smart-search-control-admin-page.php';
         include $template_path;
     }
@@ -182,12 +293,16 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             return;
         }
 
+        wp_enqueue_style( 'smart-search-control-select-min-css', plugin_dir_url(dirname(__DIR__)) .'assets/css/smarseco-select2.min.css' );
+
         wp_enqueue_style(
             'smart-search-control-admin-style',
             plugin_dir_url(dirname(__DIR__)) . 'assets/css/smart-search-control-admin-style.css',
             array(), SMARSECO_VERSION, 'all'
         );
-        wp_enqueue_script( 'smart-search-control-admin-js', plugin_dir_url(dirname(__DIR__)) . 'assets/js/smart-search-control-admin.js', [ 'jquery' ], SMARSECO_VERSION, true );
+
+        wp_enqueue_script( 'smart-search-control-select2-min-js', plugin_dir_url(dirname(__DIR__)). 'assets/js/smarseco-select2.min.js', ['jquery'], SMARSECO_VERSION, true );
+        wp_enqueue_script( 'smart-search-control-admin-js', plugin_dir_url(dirname(__DIR__)) . 'assets/js/smart-search-control-admin.js', [ 'jquery', 'smart-search-control-select2-min-js' ], SMARSECO_VERSION, true );
         wp_localize_script( 'smart-search-control-admin-js', 'SMARSECO_SETTING', [
 
             'ajaxurl'      => admin_url( 'admin-ajax.php' ),
@@ -195,6 +310,7 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             'nonce_edit'   => wp_create_nonce( 'smart_search_control_setting_nonce_edit' ),
             'nonce_delete' => wp_create_nonce( 'smart_search_control_setting_nonce_delete' ),
             'nonce_table'  => wp_create_nonce( 'create_database_table_nonce' ),
+            'nonce_tax_query'=> wp_create_nonce( 'get_taxonomies_by_post_type_nonce' ),
             'error_msg'    => __( 'Something went wrong. Please try again.' , 'smart-search-control' ),
             'confirm_msg'  => __( 'Are you sure you want to delete this search setting?' , 'smart-search-control' ),
         ]);   
@@ -222,11 +338,16 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
         $post_types   = isset( $_POST[ 'post_type' ] ) && !empty(  $_POST[ 'post_type' ] ) 
             ? array_map( 'sanitize_text_field', wp_unslash( $_POST[ 'post_type' ] ) ) 
             : get_post_types( [ 'public' => true ], 'names' );
+        $categories = isset( $_POST['categories'] ) ? $this->smarseco_sanitize_tax_terms( wp_unslash( $_POST['categories'] ) ) : [];
+        $tags = isset( $_POST['tags'] ) ? $this->smarseco_sanitize_tax_terms( wp_unslash( $_POST['tags'] ) ) : [];
+        
         $data = json_encode([
             'place_holder' => $place_holder,
             'css_id'       => $css_id,
             'class'        => $class,
-            'post_type'    => $post_types
+            'post_type'    => $post_types,
+            'categories'   => $categories,
+            'tags'         => $tags
         ]);
         
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -282,11 +403,16 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             ? array_map( 'sanitize_text_field', wp_unslash( $_POST[ 'post_type' ] ) ) 
             : get_post_types( [ 'public' => true ], 'names' );
 
+        $categories = isset( $_POST['categories'] ) ? $this->smarseco_sanitize_tax_terms( wp_unslash( $_POST['categories'] ) ) : [];
+        $tags = isset( $_POST['tags'] ) ? $this->smarseco_sanitize_tax_terms( wp_unslash( $_POST['tags'] ) ) : [];
+
         $data = json_encode([
             'place_holder' => $place_holder,
             'css_id'       => $css_id,
             'class'        => $class,
-            'post_type'    => $post_types
+            'post_type'    => $post_types,
+            'categories'   => $categories,
+            'tags'         => $tags
         ]);
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -318,6 +444,35 @@ class SMARSECO_Smart_Search_Control_Admin_Menu {
             'message' => __( 'Search settings updated successfully!', 'smart-search-control' ),
             'type'    => 'success'
         ] );
+    }
+
+    /**
+     * Sanitize taxonomy terms input
+     */
+    public function smarseco_sanitize_tax_terms( $input ) {
+
+        $output = [];
+
+        if ( ! is_array( $input ) ) {
+            return $output;
+        }
+
+        foreach ( $input as $taxonomy => $term_ids ) {
+
+            $taxonomy = sanitize_text_field( $taxonomy );
+
+            if ( ! taxonomy_exists( $taxonomy ) || ! is_array( $term_ids ) ) {
+                continue;
+            }
+
+            $output[ $taxonomy ] = array_values(
+                array_unique(
+                    array_map( 'intval', $term_ids )
+                )
+            );
+        }
+
+        return $output;
     }
 
     /**

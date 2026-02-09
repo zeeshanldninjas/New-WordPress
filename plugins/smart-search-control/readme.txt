@@ -1,90 +1,75 @@
-#  Smart Search Control
+#  Smart Search Control – Advanced Search for WooCommerce, Custom Post Types & Gutenberg
 
 Contributors: LDNinjas, farooqabdullah
-Tags: search control, analytics, woocommerce variation search, wordpress advanced search, post based search
+Tags: search, woocommerce search, custom post types, product search, advanced search
 Requires at least: 5.0
 Tested up to: 6.9
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 Requires PHP: 7.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A powerful plugin to enhance search functionality of your WordPress and WooCommerce sites with smart controls and customization.
+Enhance search on WordPress with Custom Post Type filtering, WooCommerce Product Variation search, and intelligent search engine. Includes Search Forms, Shortcodes and Gutenberg block.
 
 ## Description
 
-Enhance the search functionality of your WordPress and WooCommerce site with the **Smart Search Control** Plugin. This plugin adds a powerful and intelligent search engine to your site without replacing the default WordPress search. It allows you to display customizable search forms anywhere using shortcodes, offering users more accurate and relevant results where needed.
+**Upgrade your website’s search experience with Smart Search Control.**
+As your website grows, so does the need for precision. Smart Search Control extends native WordPress capabilities to deliver accurate, highly relevant results for data-rich websites, WooCommerce stores, and Custom Post Types (CPT).
+Whether you need a product search bar, a documentation filter, or a blog archive search, this plugin gives you full control. You can create unlimited search forms, place them anywhere using our Gutenberg Block or Shortcode, and ensure your visitors find exactly what they are looking for without frustration.
+
 
 [youtube https://www.youtube.com/watch?v=8nKal2-a-4g]
 
-## Key Features
+## 🚀 Key Features
 
-- **Improved Accuracy:** Delivers more relevant search results by analyzing content beyond titles and excerpts.  
-- **Customizable Search Algorithm:** Fine-tune the search algorithm to prioritize specific content types or fields.  
-- **Live Search Suggestions:** Provides real-time search suggestions as users type, improving the search experience.  
-- **Custom Fields Support:** Indexes and searches within custom fields created by plugins like Advanced Custom Fields (ACF).  
-- **WooCommerce Compatibility:** Optimizes search for WooCommerce products, including product attributes and variations.  
-- **Search Analytics:** Track user search queries to gain insights into what your visitors are looking for.  
-- **Easy Installation and Setup:** Simple installation and configuration process.
+🔍 **Search in Custom Post Types:** Don't limit your users to just standard posts and pages. distinctively filter and search through any registered Custom Post Type (e.g., Portfolios, Events, Real Estate Listings).
+🛒 **Advanced WooCommerce Search:** Fully compatible with WooCommerce. Allow customers to search Product Variations, SKUs, and Attributes to boost conversion rates.
+⚡ **Live Search Suggestions:** Offer a "Google-like" experience with real-time suggestions that appear as the user types.
+🧱 **Gutenberg Block & Shortcode Support:** seamlessly add a search bar to any page, post, or widget area using our dedicated Gutenberg Block or the simple [smart_search_control] shortcode.
+🎛️ **Multiple Search Instances:** Create unique search forms for different sections of your site (e.g., a "Blog Search" for your news section and a "Product Search" for your shop).
+🎨 **Customizable Results Page:** Take control of your Search Results Page (SERP). Choose between Grid or List Layouts and assign a dedicated page for results.
+🔧 **Developer Friendly:** extensive support for template overrides and hooks to fit your theme's branding perfectly.
 
-## Installation
+## Why Choose Smart Search Control?
+**1. Advance WooCommerce Search**
+Standard search often misses hidden product data. Smart Search Control allows you to index and search WooCommerce Product Variations, ensuring customers find the exact size, color, or model they are looking for.
 
-1. **WordPress Plugin Repository:**  
-    - Go to your WordPress admin panel.  
-    - Navigate to "Plugins" > "Add New".  
-    - Search for "Smart Search Control".  
-    - Click "Install Now" and then "Activate".
+**2. Custom Post Type Filtering**
+Building a directory or a portfolio? You can configure a search form to only look inside specific Post Types.
+Example: Create a search bar that only searches "Movies" and ignores "Blog Posts."
 
-2. **Manual Installation:**  
-    - Download the plugin ZIP file.  
-    - In your WordPress admin panel, go to "Plugins" > "Add New".  
-    - Click "Upload Plugin" and select the ZIP file.  
-    - Click "Install Now" and then "Activate".
+**3. Place It Anywhere**
+We believe in flexibility.
+**Gutenberg Ready:** Drag and drop the Search Block into your editor.
+**Widget Support:** Add to sidebars or footers easily. (coming soon)
+**Shortcode:** Use [smart_search_control id="123"] inside page builders like Elementor, Divi, or Beaver Builder.
 
-## Configuration
+## Installation & Usage
+1. Install and Activate Smart Search Control.
+2. Go to Smart Search Control > Add New Search.
+3. Set your placeholder text (e.g., "Search for products...").
+4. Select Post Types: Choose specific types (e.g., Products, Pages) or "Select All."
+5. Click Save and copy the generated Shortcode OR use the Gutenberg Block on any page.
+6. (Optional) Go to Settings to define a custom Search Results Page.
 
-1. Navigate to the **Smart Search Control** settings page in your WordPress admin panel.  
-2. Configure the search settings based on your preferences, including:  
-    - Selecting which content types to include in the search.  
-    - Prioritizing specific fields or content for more accurate results.  
-    - Adding a custom **placeholder, CSS ID,** and **CSS class** for styling and customization.  
-3. Select the page where you want to display the search results from the available options or create a new one for this purpose.
-4. Click **Save** to apply your configuration.
-
-## Usage
-
-To use the smart_search_control shortcode, simply insert the following shortcode into your post, page, or widget and provide an existing id associated with a configured search control. This will display the smart search form on that page.
-
-**Example**
-```php
-[smart_search_control id="123"]
-```
-In this example, 123 should be replaced with the ID of an existing smart search setup. Once added, the corresponding search form will appear on the page and be fully functional.
-
-
-## Frequently Asked Questions
-
-- **Is the plugin performance optimized?**  
-    - Yes, the plugin is designed to be efficient and optimized for performance.
-
-- **Is this plugin compatible with WooCommerce?**  
-    - Yes, the plugin enhances search for WooCommerce products.
-
-- **Can I customize the search results page?**  
-    - The plugin improves the search results, and you can further customize the appearance using your theme's templates.
-
-- **Does it support custom post types?**  
-    - Yes, the plugin supports custom post types.
-
-## Troubleshooting
-
-- If you encounter any issues, please refer to the [plugin documentation](https://ldninjas.com/docs/smartsearch-control/) or [contact our support team](https://ldninjas.com/contact-us/).
 
 ## Support
-
 For support, please visit our support forums or contact us through [our website](https://ldninjas.com).
 
+## Frequently Asked Questions
+**Q: Does this support WooCommerce Product Variations?**  
+A: Yes! Smart Search Control is optimized to search through WooCommerce product variations, attributes, and custom fields to deliver the most relevant shopping results.
+
+**Q: Can I use this with Elementor or Divi?**  
+A: Absolutely. You can use the **[smart_search_control]** shortcode in any page builder text module.
+
+**Q: Does it support Custom Post Types (CPT)?**  
+A: Yes, the plugin automatically detects all public Custom Post Types registered on your site and allows you to include or exclude them from search results.
+
 ## Changelog
+
+- **1.0.4** 
+    - New: Added Gutenberg block to add search anywhere. 
 
 - **1.0.3** 
     - New: Added admin notification if search result page is not selected. 

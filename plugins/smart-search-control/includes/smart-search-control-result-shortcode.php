@@ -82,6 +82,26 @@ class SMARSECO_Smart_Search_Control_Result {
                 $block_post_types = sanitize_text_field( wp_unslash( $_GET['block_post_types'] ) );
                 $posts_types = array_map( 'trim', explode( ',', $block_post_types ) );
 
+                // Handle block categories
+                $categories = (object) array();
+                if ( isset( $_GET['block_categories'] ) && ! empty( $_GET['block_categories'] ) ) {
+                    $block_categories_json = sanitize_text_field( wp_unslash( $_GET['block_categories'] ) );
+                    $decoded_categories = json_decode( $block_categories_json, true );
+                    if ( is_array( $decoded_categories ) ) {
+                        $categories = (object) $decoded_categories;
+                    }
+                }
+
+                // Handle block tags
+                $tags = (object) array();
+                if ( isset( $_GET['block_tags'] ) && ! empty( $_GET['block_tags'] ) ) {
+                    $block_tags_json = sanitize_text_field( wp_unslash( $_GET['block_tags'] ) );
+                    $decoded_tags = json_decode( $block_tags_json, true );
+                    if ( is_array( $decoded_tags ) ) {
+                        $tags = (object) $decoded_tags;
+                    }
+                }
+
             } else {
 
                 // Original logic for shortcode-based searches

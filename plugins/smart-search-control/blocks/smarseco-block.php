@@ -28,8 +28,88 @@ class SMARSECO_Gutenberg_Block {
 
         add_action( 'init', [ $this, 'register_block' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'ssc_gutenberg_block_enqueue_scripts' ] );
+        add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
     }
     
+    /**
+     * Register REST API routes for Gutenberg block
+     */
+    public function register_rest_routes() {
+        register_rest_route( 'smart-search-control/v1', '/taxonomies/(?P<post_type>[a-zA-Z0-9_-]+)', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_taxonomies_for_post_type' ),
+            'permission_callback' => array( $this, 'check_permissions' ),
+            'args' => array(
+                'post_type' => array(
+                    'required' => true,
+                    'validate_callback' => function( $param, $request, $key ) {
+                        return is_string( $param ) && post_type_exists( $param );
+                    }
+                )
+            )
+        ) );
+    }
+
+    /**
+     * Check permissions for REST API access
+     */
+    public function check_permissions() {
+        return current_user_can( 'edit_posts' );
+    }
+
+    /**
+     * REST API callback to get taxonomies for a post type
+     */
+    public function get_taxonomies_for_post_type( $request ) {
+        $post_type = $request->get_param( 'post_type' );
+        
+        if ( ! post_type_exists( $post_type ) ) {
+            return new WP_Error( 'invalid_post_type', 'Invalid post type', array( 'status' => 400 ) );
+        }
+
+        // Use the existing admin method to get categories and tags
+        $admin_instance = SMARSECO_Smart_Search_Control_Admin_Menu::instance();
+        $terms = $admin_instance->eff_get_categories_and_tags( $post_type );
+        
+        // Format for REST API response
+        $formatted_categories = array();
+        $formatted_tags = array();
+        
+        // Process categories
+        if ( ! empty( $terms['categories'] ) ) {
+            foreach ( $terms['categories'] as $taxonomy => $taxonomy_terms ) {
+                $formatted_categories[ $taxonomy ] = array();
+                foreach ( $taxonomy_terms as $term_id => $term ) {
+                    $formatted_categories[ $taxonomy ][] = array(
+                        'id' => $term_id,
+                        'name' => $term->name,
+                        'slug' => $term->slug
+                    );
+                }
+            }
+        }
+        
+        // Process tags
+        if ( ! empty( $terms['tags'] ) ) {
+            foreach ( $terms['tags'] as $taxonomy => $taxonomy_terms ) {
+                $formatted_tags[ $taxonomy ] = array();
+                foreach ( $taxonomy_terms as $term_id => $term ) {
+                    $formatted_tags[ $taxonomy ][] = array(
+                        'id' => $term_id,
+                        'name' => $term->name,
+                        'slug' => $term->slug
+                    );
+                }
+            }
+        }
+        
+        return rest_ensure_response( array(
+            'categories' => $formatted_categories,
+            'tags' => $formatted_tags,
+            'post_type' => $post_type
+        ) );
+    }
+
     /**
      * Enqueue scripts for Gutenberg block editor
      */
@@ -69,7 +149,9 @@ class SMARSECO_Gutenberg_Block {
                 'placeholder' => array( 'type' => 'string', 'default' => 'Search...' ),
                 'cssId' => array( 'type' => 'string', 'default' => '' ),
                 'cssClass' => array( 'type' => 'string', 'default' => '' ),
-                'postTypes' => array( 'type' => 'array', 'default' => array() )
+                'postTypes' => array( 'type' => 'array', 'default' => array() ),
+                'categories' => array( 'type' => 'object', 'default' => array() ),
+                'tags' => array( 'type' => 'object', 'default' => array() )
             )
         ) );
     }
@@ -103,6 +185,8 @@ class SMARSECO_Gutenberg_Block {
         $css_id = isset( $attributes['cssId'] ) ? $attributes['cssId'] : '';
         $css_class = isset( $attributes['cssClass'] ) ? $attributes['cssClass'] : '';
         $post_types = isset( $attributes['postTypes'] ) ? $attributes['postTypes'] : array();
+        $categories = isset( $attributes['categories'] ) ? $attributes['categories'] : array();
+        $tags = isset( $attributes['tags'] ) ? $attributes['tags'] : array();
         
         wp_enqueue_style( 'dashicons' );
         wp_enqueue_style( 'smart-search-control-style' );
@@ -127,6 +211,8 @@ class SMARSECO_Gutenberg_Block {
         $ssc_id = 'block_' . uniqid();
         $class = $css_class;
         $block_posts_types = $post_types;
+        $block_categories = $categories;
+        $block_tags = $tags;
         
         ob_start();
         $template_path = SMARSECO_TEMPLATES_DIR . 'template-smart-search-control.php';

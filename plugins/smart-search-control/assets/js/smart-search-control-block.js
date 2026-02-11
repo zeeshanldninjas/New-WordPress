@@ -1,446 +1,321 @@
-( function ( blocks, blockEditor, element, components ) {
+(function (blocks, blockEditor, element, components) {
 
     const el = element.createElement;
     const { InspectorControls } = blockEditor;
-    const { PanelBody, TextControl, CheckboxControl, SelectControl, Spinner } = components;
-    const { useState, useEffect } = element;
-    const { apiFetch } = wp.apiFetch ? wp : { apiFetch: null };
+    const { PanelBody, TextControl, CheckboxControl, Spinner } = components;
+    const { useState, useEffect, useRef } = element;
+    const apiFetch = wp.apiFetch;
 
-    blocks.registerBlockType( 'smart-search-control/search-block', {
+    /* -------------------------
+       Helper: Format Optgroup Label
+    ------------------------- */
+    const formatTaxLabel = (slug) => {
+        if (!slug) return '';
+
+        return slug
+            .replace(/[-_]/g, ' ')
+            .replace(/\bcateorie\b/i, 'Category') // fix typo
+            .replace(/\bcategories\b/i, 'Categories')
+            .replace(/\btags\b/i, 'Tags')
+            .replace(/\b\w/g, l => l.toUpperCase());
+    };
+
+    /* -------------------------
+       Select2 Wrapper (Optgroup)
+    ------------------------- */
+    const Select2Control = ({ label, value, groupedOptions, onChange, multiple }) => {
+        const selectRef = useRef();
+
+        // Init Select2
+        useEffect(() => {
+            if (!selectRef.current) return;
+
+            const $el = jQuery(selectRef.current);
+
+            $el.select2({
+                width: '100%',
+                placeholder: label
+            });
+
+            $el.val(value).trigger('change');
+
+            $el.on('change', function () {
+                let val = jQuery(this).val();
+                if (multiple && !val) val = [];
+                onChange(val || []);
+            });
+
+            return () => {
+                $el.select2('destroy');
+            };
+        }, []);
+
+        // Sync value
+        useEffect(() => {
+            if (!selectRef.current) return;
+            jQuery(selectRef.current)
+                .val(value)
+                .trigger('change.select2');
+        }, [value]);
+
+        return el('div', {},
+            label && el('label', { style: { marginBottom: '6px', display: 'block' } }, label),
+
+            el(
+                'select',
+                {
+                    ref: selectRef,
+                    multiple: multiple,
+                    style: { width: '100%' }
+                },
+
+                Object.entries(groupedOptions).map(([tax, terms]) =>
+                    el(
+                        'optgroup',
+                        {
+                            key: tax,
+                            label: formatTaxLabel(tax) // ✅ formatted label
+                        },
+
+                        terms.map(term =>
+                            el('option', {
+                                key: tax + '-' + term.id,
+                                value: tax + ':' + term.id
+                            }, term.name)
+                        )
+                    )
+                )
+            )
+        );
+    };
+
+    blocks.registerBlockType('smart-search-control/search-block', {
+
         title: 'Smart Search Control',
         icon: 'search',
         category: 'widgets',
-        keywords: ['search', 'smart', 'filter', 'find'],
 
         attributes: {
-            placeholder: { 
-                type: 'string', 
-                default: 'Search...' 
-            },
-            cssId: { 
-                type: 'string', 
-                default: '' 
-            },
-            cssClass: { 
-                type: 'string', 
-                default: '' 
-            },
-            postTypes: { 
-                type: 'array', 
-                default: [] 
-            },
-            categories: { 
-                type: 'object', 
-                default: {} 
-            },
-            tags: { 
-                type: 'object', 
-                default: {} 
-            }
+            placeholder: { type: 'string', default: 'Search...' },
+            cssId: { type: 'string', default: '' },
+            cssClass: { type: 'string', default: '' },
+            postTypes: { type: 'array', default: [] },
+            categories: { type: 'object', default: {} },
+            tags: { type: 'object', default: {} }
         },
 
-        edit: function ( props ) {
+        edit: function (props) {
+
             const { attributes, setAttributes } = props;
             const { placeholder, cssId, cssClass, postTypes, categories, tags } = attributes;
-            
-            // Ensure backward compatibility with existing blocks
+
             const safeCategories = categories || {};
             const safeTags = tags || {};
             const safePostTypes = postTypes || [];
-            
-            // Get dynamic post types from PHP (via wp_localize_script)
-            const availablePostTypes = window.smarsecoBlockData && window.smarsecoBlockData.availablePostTypes 
-                ? window.smarsecoBlockData.availablePostTypes 
-                : [
+
+            const availablePostTypes =
+                window.smarsecoBlockData?.availablePostTypes || [
                     { value: 'post', label: 'Posts' },
                     { value: 'page', label: 'Pages' }
                 ];
-            const isLoading = false;
-            
-            // State for categories and tags
+
             const [availableCategories, setAvailableCategories] = useState({});
             const [availableTags, setAvailableTags] = useState({});
             const [taxonomiesLoading, setTaxonomiesLoading] = useState(false);
 
-            // Handle post type checkbox change
-            const handlePostTypeChange = function(value, checked) {
-                const newPostTypes = safePostTypes.slice();
-                if (checked) {
-                    if (newPostTypes.indexOf(value) === -1) {
-                        newPostTypes.push(value);
-                    }
-                } else {
-                    const index = newPostTypes.indexOf(value);
-                    if (index > -1) {
-                        newPostTypes.splice(index, 1);
-                    }
-                }
-                setAttributes({ postTypes: newPostTypes });
+            /* -------------------------
+               Post Types
+            ------------------------- */
+            const handlePostTypeChange = (value, checked) => {
+                const newTypes = [...safePostTypes];
+
+                if (checked && !newTypes.includes(value))
+                    newTypes.push(value);
+
+                if (!checked)
+                    setAttributes({ postTypes: newTypes.filter(v => v !== value) });
+                else
+                    setAttributes({ postTypes: newTypes });
             };
 
-            // Handle select all post types
-            const handleSelectAll = function(checked) {
-                if (checked) {
-                    const allTypes = [];
-                    for (let i = 0; i < availablePostTypes.length; i++) {
-                        allTypes.push(availablePostTypes[i].value);
-                    }
-                    setAttributes({ postTypes: allTypes });
-                } else {
-                    setAttributes({ postTypes: [] });
-                }
-            };
-
-            const allSelected = availablePostTypes.length > 0 && safePostTypes.length === availablePostTypes.length;
-
-            // Helper function to create options with optgroups for categories
-            const getCategoriesOptions = function() {
-                const options = [];
-                Object.keys(availableCategories).forEach(function(taxonomy) {
-                    const taxonomyTerms = availableCategories[taxonomy];
-                    const taxonomyLabel = taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' ');
-                    
-                    // Add taxonomy header (disabled option)
-                    options.push({
-                        value: '',
-                        label: '--- ' + taxonomyLabel + ' ---',
-                        disabled: true
-                    });
-                    
-                    // Add terms for this taxonomy
-                    taxonomyTerms.forEach(function(term) {
-                        options.push({
-                            value: taxonomy + ':' + term.id,
-                            label: '  ' + term.name
-                        });
-                    });
+            const handleSelectAll = (checked) => {
+                setAttributes({
+                    postTypes: checked
+                        ? availablePostTypes.map(p => p.value)
+                        : []
                 });
-                return options;
             };
 
-            // Helper function to create options with optgroups for tags
-            const getTagsOptions = function() {
-                const options = [];
-                Object.keys(availableTags).forEach(function(taxonomy) {
-                    const taxonomyTerms = availableTags[taxonomy];
-                    const taxonomyLabel = taxonomy.charAt(0).toUpperCase() + taxonomy.slice(1).replace('_', ' ');
-                    
-                    // Add taxonomy header (disabled option)
-                    options.push({
-                        value: '',
-                        label: '--- ' + taxonomyLabel + ' ---',
-                        disabled: true
-                    });
-                    
-                    // Add terms for this taxonomy
-                    taxonomyTerms.forEach(function(term) {
-                        options.push({
-                            value: taxonomy + ':' + term.id,
-                            label: '  ' + term.name
-                        });
-                    });
+            const allSelected =
+                availablePostTypes.length &&
+                safePostTypes.length === availablePostTypes.length;
+
+            /* -------------------------
+               Value Helpers
+            ------------------------- */
+            const getSelectedValues = (obj) => {
+                const vals = [];
+                Object.entries(obj).forEach(([tax, ids]) => {
+                    (ids || []).forEach(id =>
+                        vals.push(tax + ':' + id)
+                    );
                 });
-                return options;
+                return vals;
             };
 
-            // Helper function to get selected values for categories
-            const getCategoriesSelectedValues = function() {
-                const selectedValues = [];
-                Object.keys(safeCategories).forEach(function(taxonomy) {
-                    const termIds = safeCategories[taxonomy] || [];
-                    termIds.forEach(function(termId) {
-                        selectedValues.push(taxonomy + ':' + termId);
-                    });
+            const parseValues = (values) => {
+                const out = {};
+                (values || []).forEach(v => {
+                    const [tax, id] = v.split(':');
+                    if (!out[tax]) out[tax] = [];
+                    out[tax].push(parseInt(id));
                 });
-                return selectedValues;
+                return out;
             };
 
-            // Helper function to get selected values for tags
-            const getTagsSelectedValues = function() {
-                const selectedValues = [];
-                Object.keys(safeTags).forEach(function(taxonomy) {
-                    const termIds = safeTags[taxonomy] || [];
-                    termIds.forEach(function(termId) {
-                        selectedValues.push(taxonomy + ':' + termId);
-                    });
-                });
-                return selectedValues;
-            };
+            /* -------------------------
+               Load Taxonomies
+            ------------------------- */
+            useEffect(() => {
 
-            // Handle categories change
-            const handleCategoriesChange = function(newValues) {
-                const newCategories = {};
-                newValues.forEach(function(value) {
-                    const parts = value.split(':');
-                    if (parts.length === 2) {
-                        const taxonomy = parts[0];
-                        const termId = parseInt(parts[1]);
-                        if (!newCategories[taxonomy]) {
-                            newCategories[taxonomy] = [];
-                        }
-                        newCategories[taxonomy].push(termId);
-                    }
-                });
-                setAttributes({ categories: newCategories });
-            };
-
-            // Handle tags change
-            const handleTagsChange = function(newValues) {
-                const newTags = {};
-                newValues.forEach(function(value) {
-                    const parts = value.split(':');
-                    if (parts.length === 2) {
-                        const taxonomy = parts[0];
-                        const termId = parseInt(parts[1]);
-                        if (!newTags[taxonomy]) {
-                            newTags[taxonomy] = [];
-                        }
-                        newTags[taxonomy].push(termId);
-                    }
-                });
-                setAttributes({ tags: newTags });
-            };
-
-            // Load taxonomies when post types change
-            useEffect(function() {
-                if (safePostTypes.length === 0) {
+                if (!safePostTypes.length) {
                     setAvailableCategories({});
                     setAvailableTags({});
                     return;
                 }
 
-                // Check if apiFetch is available
-                if (!apiFetch) {
-                    console.warn('wp.apiFetch not available, skipping taxonomy loading');
-                    return;
-                }
-
                 setTaxonomiesLoading(true);
-                
-                // Load taxonomies for each selected post type
-                const loadPromises = safePostTypes.map(function(postType) {
-                    return apiFetch({
-                        path: '/smart-search-control/v1/taxonomies/' + postType
-                    });
-                });
 
-                Promise.all(loadPromises)
-                    .then(function(responses) {
-                        const mergedCategories = {};
-                        const mergedTags = {};
-                        
-                        responses.forEach(function(response) {
-                            // Merge categories
-                            Object.keys(response.categories || {}).forEach(function(taxonomy) {
-                                if (!mergedCategories[taxonomy]) {
-                                    mergedCategories[taxonomy] = [];
-                                }
-                                mergedCategories[taxonomy] = mergedCategories[taxonomy].concat(response.categories[taxonomy]);
-                            });
-                            
-                            // Merge tags
-                            Object.keys(response.tags || {}).forEach(function(taxonomy) {
-                                if (!mergedTags[taxonomy]) {
-                                    mergedTags[taxonomy] = [];
-                                }
-                                mergedTags[taxonomy] = mergedTags[taxonomy].concat(response.tags[taxonomy]);
-                            });
-                        });
-                        
-                        setAvailableCategories(mergedCategories);
-                        setAvailableTags(mergedTags);
-                    })
-                    .catch(function(error) {
-                        console.error('Error loading taxonomies:', error);
-                        setAvailableCategories({});
-                        setAvailableTags({});
-                    })
-                    .finally(function() {
-                        setTaxonomiesLoading(false);
-                    });
-            }, [safePostTypes]);
-
-            // Create post type controls
-            const postTypeElements = [];
-            
-            if (!isLoading) {
-                // Add Select All checkbox
-                postTypeElements.push(
-                    el( CheckboxControl, {
-                        key: 'select-all',
-                        label: 'Select All',
-                        checked: allSelected,
-                        onChange: handleSelectAll
-                    })
-                );
-                
-                // Add individual post type checkboxes
-                for (let i = 0; i < availablePostTypes.length; i++) {
-                    const postType = availablePostTypes[i];
-                    postTypeElements.push(
-                        el( CheckboxControl, {
-                            key: postType.value,
-                            label: postType.label,
-                            checked: safePostTypes.indexOf(postType.value) !== -1,
-                            onChange: function(checked) {
-                                handlePostTypeChange(postType.value, checked);
-                            }
+                Promise.all(
+                    safePostTypes.map(pt =>
+                        apiFetch({
+                            path: '/smart-search-control/v1/taxonomies/' + pt
                         })
-                    );
-                }
-            }
-
-            // Create the block preview (Search Input UI)
-            const blockPreview = el(
-                'div',
-                { className: 'smarseco-default-search-bar-container' },
-
-                el(
-                    'form',
-                    {
-                        className: 'smarseco-default-search-bar ssc-search-form',
-                        style: { pointerEvents: 'none' } // prevent submit in editor
-                    },
-
-                    el('input', {
-                        type: 'text',
-                        className: 'smarseco-default-search-input search-query',
-                        placeholder: placeholder || 'Search...',
-                        disabled: true
-                    }),
-
-                    el(
-                        'button',
-                        {
-                            type: 'button',
-                            className: 'smarseco-default-search-btn search-btn'
-                        },
-                        el(
-                            'span',
-                            { className: 'smarseco-default-search-icon' },
-                            el('span', { className: 'dashicons dashicons-search' })
-                        )
                     )
                 )
+                .then(responses => {
+
+                    const cats = {};
+                    const tgs = {};
+
+                    responses.forEach(res => {
+
+                        Object.entries(res.categories || {}).forEach(([k,v]) => {
+                            cats[k] = (cats[k] || []).concat(v);
+                        });
+
+                        Object.entries(res.tags || {}).forEach(([k,v]) => {
+                            tgs[k] = (tgs[k] || []).concat(v);
+                        });
+
+                    });
+
+                    setAvailableCategories(cats);
+                    setAvailableTags(tgs);
+                })
+                .finally(() => setTaxonomiesLoading(false));
+
+            }, [safePostTypes]);
+
+            /* -------------------------
+               UI
+            ------------------------- */
+            const postTypeElements = [
+                el(CheckboxControl,{
+                    label:'Select All',
+                    checked:allSelected,
+                    onChange:handleSelectAll
+                }),
+                ...availablePostTypes.map(pt =>
+                    el(CheckboxControl,{
+                        key:pt.value,
+                        label:pt.label,
+                        checked:safePostTypes.includes(pt.value),
+                        onChange:(val)=>handlePostTypeChange(pt.value,val)
+                    })
+                )
+            ];
+
+            const blockPreview = el(
+                'div',
+                { className:'smarseco-default-search-bar-container' },
+                el('input',{
+                    type:'text',
+                    placeholder:placeholder,
+                    disabled:true
+                })
             );
 
-            return el( 'div', {},
-                // Inspector Controls (Sidebar)
-                el( InspectorControls, {},
-                    el( PanelBody, { 
-                        title: 'Search Settings', 
-                        initialOpen: true 
-                    },
-                        el( TextControl, {
-                            label: 'Placeholder Text',
-                            value: placeholder,
-                            onChange: function(value) {
-                                setAttributes({ placeholder: value });
-                            },
-                            help: 'Text to display in the search input field'
+            /* -------------------------
+               Render
+            ------------------------- */
+            return el('div',{},
+                el(InspectorControls,{},
+
+                    el(PanelBody,{title:'Search Settings'},
+                        el(TextControl,{
+                            label:'Placeholder Text',
+                            value:placeholder,
+                            onChange:v=>setAttributes({placeholder:v})
                         })
                     ),
 
-                    el( PanelBody, { 
-                        title: 'Advanced Settings', 
-                        initialOpen: false 
-                    },
-                        el( TextControl, {
-                            label: 'CSS ID',
-                            value: cssId,
-                            onChange: function(value) {
-                                setAttributes({ cssId: value });
-                            },
-                            help: 'Optional unique identifier for styling'
+                    el(PanelBody,{title:'Advanced Settings'},
+                        el(TextControl,{
+                            label:'CSS ID',
+                            value:cssId,
+                            onChange:v=>setAttributes({cssId:v})
                         }),
-                        el( TextControl, {
-                            label: 'CSS Class',
-                            value: cssClass,
-                            onChange: function(value) {
-                                setAttributes({ cssClass: value });
-                            },
-                            help: 'Optional CSS classes for styling'
+                        el(TextControl,{
+                            label:'CSS Class',
+                            value:cssClass,
+                            onChange:v=>setAttributes({cssClass:v})
                         })
                     ),
 
-                    el( PanelBody, { 
-                        title: 'Post Types', 
-                        initialOpen: true 
-                    },
-                        isLoading ? 
-                            el( 'div', { style: { textAlign: 'center', padding: '20px' } },
-                                el( Spinner )
-                            ) :
-                            postTypeElements
+                    el(PanelBody,{title:'Post Types'},postTypeElements),
+
+                    el(PanelBody,{title:'Categories'},
+                        safePostTypes.length===0
+                            ? el('p',{},'Select post types first.')
+                            : taxonomiesLoading
+                                ? el(Spinner)
+                                : el(Select2Control,{
+                                    label:'Categories',
+                                    multiple:true,
+                                    value:getSelectedValues(safeCategories),
+                                    groupedOptions:availableCategories,
+                                    onChange:(vals)=>setAttributes({
+                                        categories:parseValues(vals)
+                                    })
+                                })
                     ),
 
-                    // Categories Panel
-                    el( PanelBody, { 
-                        title: 'Categories', 
-                        initialOpen: false 
-                    },
-                        safePostTypes.length === 0 ? 
-                            el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                'Select post types first to enable category filtering.'
-                            ) :
-                            taxonomiesLoading ?
-                                el( 'div', { style: { textAlign: 'center', padding: '20px' } },
-                                    el( Spinner )
-                                ) :
-                                Object.keys(availableCategories).length === 0 ?
-                                    el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                        'No categories available for selected post types.'
-                                    ) :
-                                    el( SelectControl, {
-                                        label: 'Categories',
-                                        multiple: true,
-                                        value: getCategoriesSelectedValues(),
-                                        options: getCategoriesOptions(),
-                                        onChange: handleCategoriesChange,
-                                        help: 'Select categories to filter search results. Available after selecting post types.'
+                    el(PanelBody,{title:'Tags'},
+                        safePostTypes.length===0
+                            ? el('p',{},'Select post types first.')
+                            : taxonomiesLoading
+                                ? el(Spinner)
+                                : el(Select2Control,{
+                                    label:'Tags',
+                                    multiple:true,
+                                    value:getSelectedValues(safeTags),
+                                    groupedOptions:availableTags,
+                                    onChange:(vals)=>setAttributes({
+                                        tags:parseValues(vals)
                                     })
-                    ),
-
-                    // Tags Panel
-                    el( PanelBody, { 
-                        title: 'Tags', 
-                        initialOpen: false 
-                    },
-                        safePostTypes.length === 0 ? 
-                            el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                'Select post types first to enable tag filtering.'
-                            ) :
-                            taxonomiesLoading ?
-                                el( 'div', { style: { textAlign: 'center', padding: '20px' } },
-                                    el( Spinner )
-                                ) :
-                                Object.keys(availableTags).length === 0 ?
-                                    el( 'p', { style: { fontStyle: 'italic', color: '#666' } },
-                                        'No tags available for selected post types.'
-                                    ) :
-                                    el( SelectControl, {
-                                        label: 'Tags',
-                                        multiple: true,
-                                        value: getTagsSelectedValues(),
-                                        options: getTagsOptions(),
-                                        onChange: handleTagsChange,
-                                        help: 'Select tags to filter search results. Available after selecting post types.'
-                                    })
+                                })
                     )
                 ),
 
-                // Block Preview
                 blockPreview
             );
         },
 
-        save: function () {
-            // Return null since we're using server-side rendering
-            return null;
-        }
+        save: () => null
     });
 
-} )(
+})(
     window.wp.blocks,
     window.wp.blockEditor,
     window.wp.element,
